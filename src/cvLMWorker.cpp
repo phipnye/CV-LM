@@ -8,8 +8,8 @@
 
 cvLMWorker::cvLMWorker(const Eigen::VectorXd& y_, const Eigen::MatrixXd& X_, const Eigen::VectorXi& s_, const IntegerVector& ns_, const int& n_, const String& pivot_, const bool& rankCheck_)
   : y(y_), X(X_), s(s_), ns(ns_), n(n_), pivot(pivot_), rankCheck(rankCheck_), MSE(0.0) {}
-cvLMWorker::cvLMWorker(const cvLMWorker& CVw, RcppParallel::Split)
-  : y(CVw.y), X(CVw.X), s(CVw.s), ns(CVw.ns), n(CVw.n), pivot(CVw.pivot), rankCheck(CVw.rankCheck), MSE(0.0) {}
+cvLMWorker::cvLMWorker(const cvLMWorker& CVLW, RcppParallel::Split)
+  : y(CVLW.y), X(CVLW.X), s(CVLW.s), ns(CVLW.ns), n(CVLW.n), pivot(CVLW.pivot), rankCheck(CVLW.rankCheck), MSE(0.0) {}
 
 void cvLMWorker::operator()(std::size_t begin, std::size_t end) {
   for (std::size_t i = begin; i < end; ++i) {
@@ -25,6 +25,6 @@ void cvLMWorker::operator()(std::size_t begin, std::size_t end) {
   }
 }
 
-void cvLMWorker::join(const cvLMWorker& CVw) {
-  MSE += CVw.MSE;
+void cvLMWorker::join(const cvLMWorker& CVLW) {
+  MSE += CVLW.MSE;
 }
