@@ -1,0 +1,5 @@
+useDynLib(cvLM, .registration=TRUE)
+importFrom(Rcpp, evalCpp)
+export(cv.lm)
+export(par.cv.lm)
+importFrom(RcppParallel,RcppParallelLibs)

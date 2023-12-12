@@ -1,0 +1,12 @@
+Package: cvLM
+Type: Package
+Title: Cross-Validation for Linear Models
+Version: 1.0
+Date: 2023-12-09
+Author: Philip Nye
+Maintainer: Philip Nye <phipnye@gmail.com>
+Description: Functions implemented in C++ leveraging Rcpp, RcppParallel, and Eigen libraries to implement cross-validation techniques for linear regression models. The code enables Leave-One-Out Cross-Validation (LOOCV) and K-Fold Cross-Validation for linear regression using Eigen matrices.
+License: MIT + file LICENSE
+Imports: Rcpp (>= 1.0.11), RcppParallel (>= 5.1.7), RcppEigen (>= 0.3.3.7.0)
+LinkingTo: Rcpp, RcppParallel, RcppEigen
+SystemRequirements: GNU make
