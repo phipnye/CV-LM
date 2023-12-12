@@ -19,7 +19,7 @@
 
     \item{K}{Number of folds for cross-validation.}
 
-    \item{seed}{Seed for reproducibility. Ignored when K equals the number of observations (N).}
+    \item{seed}{Seed for reproducibility.}
 
     \item{pivot}{Boolean for determining whether to perform pivoting for Cholesky decomposition. Options are TRUE (higher stability but potentially slower) and FALSE (potentially faster but less stability).}
 }
