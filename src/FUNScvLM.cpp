@@ -38,6 +38,24 @@ Eigen::VectorXd OLScoef(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, cons
   return W;
 }
 
+// Generate Ridge regression coefficients
+Eigen::VectorXd Ridgecoef(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const bool& pivot, const double& lambda) {
+  Eigen::MatrixXd XT = X.transpose();
+  Eigen::MatrixXd XTX = XT * X;
+  XTX.diagonal().array() += lambda;
+  Eigen::VectorXd XTy = XT * y;
+  Eigen::VectorXd W(X.cols());
+  if (pivot) {
+    Eigen::LDLT<Eigen::MatrixXd> Cholesky(XTX);
+    W = Cholesky.solve(XTy);
+  }
+  else {
+    Eigen::LLT<Eigen::MatrixXd> Cholesky(XTX);
+    W = Cholesky.solve(XTy);
+  }
+  return W;
+}
+
 // Extract elements of our features that are in-sample
 Eigen::MatrixXd XinSample(const Eigen::MatrixXd& X, const Eigen::VectorXi& s, const int& i) {
   Eigen::VectorXi mask = (s.array() != (i + 1)).cast<int>();

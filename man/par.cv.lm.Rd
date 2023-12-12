@@ -19,9 +19,9 @@
 
     \item{seed}{Seed for reproducibility. Ignored when K equals the number of observations (N).}
 
-    \item{pivot}{Type of pivot for QR decomposition. Options are "full" (highest stability but slowest), "none" (fastest but least stability), and "col" (moderate stability and speed). \emph{NOTE:} User should only use "none" when they are certain the data matrix is of full rank.}
+    \item{pivot}{Type of pivot for QR decomposition. Options are "full" (highest stability but slowest), "none" (fastest but least stability), and "col" (moderate stability and speed). \emph{Note:} Use "none" only when certain the data matrix is of full rank.}
 
-    \item{rankCheck}{Boolean for telling the program to ensure the data matrix has full column rank. Not available when pivot is set to "none".}
+    \item{rankCheck}{Boolean for ensuring the data matrix has full column rank. Not available when pivot is set to "none".}
 }
 \value{
     A list containing the value for K used, the cross-validation value, and the seed used.

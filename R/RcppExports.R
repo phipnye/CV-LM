@@ -5,7 +5,15 @@ cv.lm <- function(y, X, K, seed, pivot = "full", rankCheck = TRUE) {
     .Call(`_cvLM_cvLM`, y, X, K, seed, pivot, rankCheck)
 }
 
+cv.ridge <- function(y, X, lambda, K, seed, pivot = TRUE) {
+    .Call(`_cvLM_cvRidge`, y, X, lambda, K, seed, pivot)
+}
+
 par.cv.lm <- function(y, X, K, seed, pivot = "full", rankCheck = TRUE) {
     .Call(`_cvLM_parcvLM`, y, X, K, seed, pivot, rankCheck)
+}
+
+par.cv.ridge <- function(y, X, lambda, K, seed, pivot = TRUE) {
+    .Call(`_cvLM_parcvRidge`, y, X, lambda, K, seed, pivot)
 }
 

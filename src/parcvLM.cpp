@@ -4,7 +4,7 @@
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 #include "FUNScvLM.h"
-#include "CVWorker.h"
+#include "cvLMWorker.h"
 
 using namespace Rcpp;
 
@@ -101,9 +101,9 @@ List parcvLM(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, int K, const in
       ns[i] = sum(s == (i + 1));
     }
     int ms = max(s);
-    CVWorker cvWorker(y, X, sEigen, ns, n, pivot, rankCheck);
-    RcppParallel::parallelReduce(0, ms, cvWorker);
-    CV = cvWorker.MSE;
+    cvLMWorker CVLMW(y, X, sEigen, ns, n, pivot, rankCheck);
+    RcppParallel::parallelReduce(0, ms, CVLMW);
+    CV = CVLMW.MSE;
   }
   return List::create(_["K"] = K, _["CV"] = CV, _["seed"] = seed);
 }

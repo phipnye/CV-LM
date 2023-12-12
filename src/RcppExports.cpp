@@ -27,6 +27,22 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cvRidge
+List cvRidge(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, const double& lambda, int K, const int& seed, const bool& pivot);
+RcppExport SEXP _cvLM_cvRidge(SEXP ySEXP, SEXP XSEXP, SEXP lambdaSEXP, SEXP KSEXP, SEXP seedSEXP, SEXP pivotSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const double& >::type lambda(lambdaSEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< const int& >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< const bool& >::type pivot(pivotSEXP);
+    rcpp_result_gen = Rcpp::wrap(cvRidge(y, X, lambda, K, seed, pivot));
+    return rcpp_result_gen;
+END_RCPP
+}
 // parcvLM
 List parcvLM(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, int K, const int& seed, const String& pivot, const bool& rankCheck);
 RcppExport SEXP _cvLM_parcvLM(SEXP ySEXP, SEXP XSEXP, SEXP KSEXP, SEXP seedSEXP, SEXP pivotSEXP, SEXP rankCheckSEXP) {
@@ -43,10 +59,28 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// parcvRidge
+List parcvRidge(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, const double& lambda, int K, const int& seed, const bool& pivot);
+RcppExport SEXP _cvLM_parcvRidge(SEXP ySEXP, SEXP XSEXP, SEXP lambdaSEXP, SEXP KSEXP, SEXP seedSEXP, SEXP pivotSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const double& >::type lambda(lambdaSEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< const int& >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< const bool& >::type pivot(pivotSEXP);
+    rcpp_result_gen = Rcpp::wrap(parcvRidge(y, X, lambda, K, seed, pivot));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_cvLM_cvLM", (DL_FUNC) &_cvLM_cvLM, 6},
+    {"_cvLM_cvRidge", (DL_FUNC) &_cvLM_cvRidge, 6},
     {"_cvLM_parcvLM", (DL_FUNC) &_cvLM_parcvLM, 6},
+    {"_cvLM_parcvRidge", (DL_FUNC) &_cvLM_parcvRidge, 6},
     {NULL, NULL, 0}
 };
 

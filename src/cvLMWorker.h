@@ -1,5 +1,5 @@
-#ifndef CV_WORKER_H
-#define CV_WORKER_H
+#ifndef CV_LM_WORKER_H
+#define CV_LM_WORKER_H
 
 #include <Rcpp.h>
 #include <RcppEigen.h>
@@ -19,10 +19,10 @@ struct cvLMWorker : public RcppParallel::Worker {
   double MSE;
 
   cvLMWorker(const Eigen::VectorXd& y_, const Eigen::MatrixXd& X_, const Eigen::VectorXi& s_, const IntegerVector& ns_, const int& n_, const String& pivot_, const bool& rankCheck_);
-  cvLMWorker(const cvLMWorker& CVw, RcppParallel::Split);
+  cvLMWorker(const cvLMWorker& CVLMW, RcppParallel::Split);
 
   void operator()(std::size_t begin, std::size_t end);
-  void join(const cvLMWorker& CVw);
+  void join(const cvLMWorker& CVLMW);
 };
 
 #endif

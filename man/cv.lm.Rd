@@ -19,9 +19,9 @@
 
     \item{seed}{Seed for reproducibility. Ignored when K equals the number of observations (N).}
 
-    \item{pivot}{Type of pivot for QR decomposition. Options are "full" (highest stability but slowest), "none" (fastest but least stability), and "col" (moderate stability and speed). \emph{NOTE:} User should only use "none" when they are certain the data matrix is of full rank.}
+    \item{pivot}{Type of pivot for QR decomposition. Options are "full" (highest stability but slowest), "none" (fastest but least stability), and "col" (moderate stability and speed). \emph{Note:} Use "none" only when certain the data matrix is of full rank.}
 
-    \item{rankCheck}{Boolean for telling the program to ensure the data matrix has full column rank. Not available when pivot is set to "none".}
+    \item{rankCheck}{Boolean for ensuring the data matrix has full column rank. Not available when pivot is set to "none".}
 }
 \value{
     A list containing the value for K used, the cross-validation value, and the seed used.
@@ -30,13 +30,13 @@
     The \code{cv.lm} function uses Eigen matrices from RcppEigen to perform QR decomposition. It supports three decomposition methods:
 
     \itemize{
-        \item When \code{pivot} is set to "full," \code{cv.lm} employs Eigen's Householder QR decomposition with full pivoting \deqn{PXP^T=QR}
+        \item When \code{pivot} is set to "full," \code{cv.lm} employs Eigen's Householder QR decomposition with full pivoting: \deqn{PXP^T=QR}
       
-        \item Setting \code{pivot} to "col" triggers the use of Eigen's Householder QR decomposition with column-pivoting \deqn{XP=QR}
+        \item Setting \code{pivot} to "col" triggers the use of Eigen's Householder QR decomposition with column-pivoting: \deqn{XP=QR}
       
-        \item If \code{pivot} is set to "none," \code{cv.lm} uses Eigen's Householder QR decomposition without pivoting \deqn{X=QR}This method does not reveal the matrix's rank, hence the absence of the \code{rankCheck} feature.
+        \item If \code{pivot} is set to "none," \code{cv.lm} uses Eigen's Householder QR decomposition without pivoting: \deqn{X=QR} This method does not reveal the matrix's rank, hence the absence of the \code{rankCheck} feature.
     }
-  
+
     For more technical details, refer to the \href{https://eigen.tuxfamily.org/dox/group__QR__Module.html}{Eigen QR Module documentation}.
 }
 
