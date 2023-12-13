@@ -31,4 +31,7 @@ Eigen::VectorXd youtSample(const Eigen::VectorXd& y, const Eigen::VectorXi& s, c
 // Sampling assignment for CV
 IntegerVector sampleCV(const IntegerVector& x, const int& size);
 
+// Setup partitions for CV
+List cvSetup(const int& seed, const int& n, const int& K);
+
 #endif

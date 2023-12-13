@@ -90,18 +90,11 @@ List parcvLM(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, int K, const in
     CV /= n;
   }
   else {
-    Function setSeed("set.seed");
-    setSeed(seed);
-        int f = ceil(static_cast<double>(n) / K);
-    IntegerVector x = rep(seq(1, K), f);
-    IntegerVector s = sampleCV(x, n);
-    Eigen::VectorXi sEigen = as<Eigen::Map<Eigen::VectorXi>>(s);
-    IntegerVector ns(K);
-    for (int i = 0; i < K; ++i) {
-      ns[i] = sum(s == (i + 1));
-    }
-    int ms = max(s);
-    cvLMWorker CVLMW(y, X, sEigen, ns, n, pivot, rankCheck);
+    List Partitions = cvSetup(seed, n, K);
+    int ms = Partitions["ms"];
+    Eigen::VectorXi s = Partitions["s"];
+    NumericVector ns = Partitions["ns"];
+    cvLMWorker CVLMW(y, X, s, ns, n, pivot, rankCheck);
     RcppParallel::parallelReduce(0, ms, CVLMW);
     CV = CVLMW.MSE;
   }

@@ -13,12 +13,12 @@ struct cvRidgeWorker : public RcppParallel::Worker {
   const Eigen::MatrixXd& X;
   const double& lambda;
   const Eigen::VectorXi& s;
-  const IntegerVector& ns;
+  const NumericVector& ns;
   const int& n;
   const bool& pivot;
   double MSE;
 
-  cvRidgeWorker(const Eigen::VectorXd& y_, const Eigen::MatrixXd& X_, const double& lamda_, const Eigen::VectorXi& s_, const IntegerVector& ns_, const int& n_, const bool& pivot_);
+  cvRidgeWorker(const Eigen::VectorXd& y_, const Eigen::MatrixXd& X_, const double& lamda_, const Eigen::VectorXi& s_, const NumericVector& ns_, const int& n_, const bool& pivot_);
   cvRidgeWorker(const cvRidgeWorker& CVRW, RcppParallel::Split);
 
   void operator()(std::size_t begin, std::size_t end);

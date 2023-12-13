@@ -6,7 +6,7 @@
 #include "FUNScvLM.h"
 #include "cvLMWorker.h"
 
-cvLMWorker::cvLMWorker(const Eigen::VectorXd& y_, const Eigen::MatrixXd& X_, const Eigen::VectorXi& s_, const IntegerVector& ns_, const int& n_, const String& pivot_, const bool& rankCheck_)
+cvLMWorker::cvLMWorker(const Eigen::VectorXd& y_, const Eigen::MatrixXd& X_, const Eigen::VectorXi& s_, const NumericVector& ns_, const int& n_, const String& pivot_, const bool& rankCheck_)
   : y(y_), X(X_), s(s_), ns(ns_), n(n_), pivot(pivot_), rankCheck(rankCheck_), MSE(0.0) {}
 cvLMWorker::cvLMWorker(const cvLMWorker& CVLMW, RcppParallel::Split)
   : y(CVLMW.y), X(CVLMW.X), s(CVLMW.s), ns(CVLMW.ns), n(CVLMW.n), pivot(CVLMW.pivot), rankCheck(CVLMW.rankCheck), MSE(0.0) {}
@@ -20,8 +20,8 @@ void cvLMWorker::operator()(std::size_t begin, std::size_t end) {
     Eigen::VectorXd W = OLScoef(XinS, yinS, pivot, rankCheck);
     Eigen::VectorXd yhat = XoutS * W;
     double costI = cost(youtS, yhat);
-    double alphaI = static_cast<double>(ns[i]) / n;
-    MSE += alphaI * costI;
+    double alphaI = ns[i] / n;
+    MSE += (alphaI * costI);
   }
 }
 

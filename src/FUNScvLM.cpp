@@ -114,3 +114,20 @@ IntegerVector sampleCV(const IntegerVector& x, const int& size) {
   IntegerVector indices = sample(x, size);
   return indices;
 }
+
+// Setup partitions for CV
+List cvSetup(const int& seed, const int& n, const int& K) {
+  Function setSeed("set.seed");
+  setSeed(seed);
+  int f = ceil(static_cast<double>(n) / K);
+  IntegerVector x = rep(seq(1, K), f);
+  IntegerVector s = sampleCV(x, n);
+  Eigen::VectorXi sEigen = as<Eigen::Map<Eigen::VectorXi>>(s);
+  IntegerVector ns(K);
+  for (int i = 0; i < K; ++i) {
+    ns[i] = sum(s == (i + 1));
+  }
+  NumericVector nsDouble = as<NumericVector>(ns);
+  int ms = max(s);
+  return List::create(_["ms"] = ms, _["s"] = sEigen, _["ns"] = nsDouble);
+}
