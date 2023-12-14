@@ -190,9 +190,13 @@ double loocvRidge(const int& n, const int& d, const bool& pivot, const Eigen::Ma
     CholInv = Cholesky.solve(Eigen::MatrixXd::Identity(d, d));
   }
   Eigen::MatrixXd Hlambda = X * CholInv * XT;
-  Eigen::MatrixXd IHlambda = Eigen::MatrixXd::Identity(n, n) - Hlambda;
-  Eigen::MatrixXd IHdiaginv = IHlambda.diagonal().cwiseInverse().asDiagonal();
-  double CV = y.transpose() * IHlambda * IHdiaginv * IHdiaginv * IHlambda * y;
+  Eigen::VectorXd yhat = Hlambda * y;
+  double CV = 0.0;
+  for (int i = 0; i < n; ++i) {
+    double error = y[i] - yhat[i];
+    double leverage = 1 - Hlambda(i, i);
+    CV += pow(error / leverage, 2);
+  }
   CV /= static_cast<double>(n);
   return CV;
 }

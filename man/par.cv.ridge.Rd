@@ -97,10 +97,10 @@ all.equal(
 # )
 # Unit: milliseconds
 #               expr      min       lq     mean   median       uq      max neval
-#        LOOCV.pivot 518.9731 530.2629 617.0509 538.6154 766.6501 818.0020    30
-#      LOOCV.nopivot 522.0560 535.2666 651.2714 580.7481 771.2185 803.6498    30
-#    LOOCV.pivot.par 517.6933 528.9713 625.0376 535.8320 765.0172 827.0741    30
-#  LOOCV.nopivot.par 517.4901 530.2807 653.1769 560.5338 784.4416 835.4171    30
+#        LOOCV.pivot 505.5007 510.2041 529.0260 529.0198 547.9949 551.4602    30
+#      LOOCV.nopivot 503.8763 507.0525 527.7067 517.6824 548.2218 554.2000    30
+#    LOOCV.pivot.par 505.4480 507.5278 524.6451 512.0607 547.0429 553.0218    30
+#  LOOCV.nopivot.par 504.6958 508.1377 525.7437 512.1759 547.4681 554.2158    30
 
 # Internally calls cv.lm if lambda is set to 0
 identical(
