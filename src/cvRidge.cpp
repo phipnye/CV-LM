@@ -49,21 +49,26 @@ List cvRidge(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, const double& l
   if (K != K0) {
     warning("The value for K has changed. See returned value for the value of K used.");
   }
-  List Partitions = cvSetup(seed, n, K);
-  int ms = Partitions["ms"];
-  Eigen::VectorXi s = Partitions["s"];
-  NumericVector ns = Partitions["ns"];
   double CV = 0.0;
-  for (int i = 0; i < ms; ++i) {
-    Eigen::MatrixXd XinS = XinSample(X, s, i);
-    Eigen::VectorXd yinS = yinSample(y, s, i);
-    Eigen::MatrixXd XoutS = XoutSample(X, s, i);
-    Eigen::VectorXd youtS = youtSample(y, s, i);
-    Eigen::VectorXd W = Ridgecoef(XinS, yinS, pivot, lambda);
-    Eigen::VectorXd yhat = XoutS * W;
-    double costI = cost(youtS, yhat);
-    double alphaI = ns[i] / n;
-    CV += (alphaI * costI);
+  if (K == n) {
+    CV = loocvRidge(n, d, pivot, X, y, lambda);
+  }
+  else {
+    List Partitions = cvSetup(seed, n, K);
+    int ms = Partitions["ms"];
+    Eigen::VectorXi s = Partitions["s"];
+    NumericVector ns = Partitions["ns"];
+    for (int i = 0; i < ms; ++i) {
+      Eigen::MatrixXd XinS = XinSample(X, s, i);
+      Eigen::VectorXd yinS = yinSample(y, s, i);
+      Eigen::MatrixXd XoutS = XoutSample(X, s, i);
+      Eigen::VectorXd youtS = youtSample(y, s, i);
+      Eigen::VectorXd W = Ridgecoef(XinS, yinS, pivot, lambda);
+      Eigen::VectorXd yhat = XoutS * W;
+      double costI = cost(youtS, yhat);
+      double alphaI = ns[i] / n;
+      CV += (alphaI * costI);
+    }
   }
   return List::create(_["K"] = K, _["CV"] = CV, _["seed"] = seed);
 }

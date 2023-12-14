@@ -51,43 +51,7 @@ List parcvLM(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, int K, const in
   
   double CV = 0.0;
   if (K == n) {
-    Eigen::VectorXd yhat(n);
-    Eigen::VectorXd diagH(n);
-    Eigen::VectorXd W(n);
-    Eigen::MatrixXd Q(n, d);
-    if (pivot == "full") {
-      Eigen::FullPivHouseholderQR<Eigen::MatrixXd> QR(X);
-      if(rankCheck && (QR.rank() != d)) {
-        stop("OLS coefficients not produced because X is not full column rank.");
-      }
-      W = QR.solve(y);
-      Q = QR.matrixQ().leftCols(d);
-      yhat = X * W;
-      diagH = Q.rowwise().squaredNorm();
-    }
-    else if(pivot == "col") {
-      Eigen::ColPivHouseholderQR<Eigen::MatrixXd> QR(X);
-      if(rankCheck && (QR.rank() != d)) {
-        stop("OLS coefficients not produced because X is not full column rank.");
-      }
-      W = QR.solve(y);
-      Q = QR.householderQ() * Eigen::MatrixXd::Identity(n, d);
-      yhat = X * W;
-      diagH = Q.rowwise().squaredNorm();
-    }
-    else {
-      Eigen::HouseholderQR<Eigen::MatrixXd> QR(X);
-      W = QR.solve(y);
-      Q = QR.householderQ() * Eigen::MatrixXd::Identity(n, d);
-      yhat = X * W;
-      diagH = Q.rowwise().squaredNorm();
-    }
-    for (int i = 0; i < n; ++i) {
-      double error = y[i] - yhat[i];
-      double leverage = 1 - diagH[i];
-      CV += pow(error / leverage, 2);
-    }
-    CV /= n;
+    CV = loocvLM(n, d, pivot, X, y, rankCheck);
   }
   else {
     List Partitions = cvSetup(seed, n, K);

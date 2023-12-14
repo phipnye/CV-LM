@@ -131,3 +131,68 @@ List cvSetup(const int& seed, const int& n, const int& K) {
   int ms = max(s);
   return List::create(_["ms"] = ms, _["s"] = sEigen, _["ns"] = nsDouble);
 }
+
+// Leave-one-out cross-validation for linear regression
+double loocvLM(const int& n, const int& d, const String& pivot, const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const bool& rankCheck) {
+  Eigen::VectorXd yhat(n);
+  Eigen::VectorXd diagH(n);
+  Eigen::VectorXd W(n);
+  Eigen::MatrixXd Q(n, d);
+  if (pivot == "full") {
+    Eigen::FullPivHouseholderQR<Eigen::MatrixXd> QR(X);
+    if(rankCheck && (QR.rank() != d)) {
+      stop("OLS coefficients not produced because X is not full column rank.");
+    }
+    W = QR.solve(y);
+    Q = QR.matrixQ().leftCols(d);
+    yhat = X * W;
+    diagH = Q.rowwise().squaredNorm();
+  }
+  else if(pivot == "col") {
+    Eigen::ColPivHouseholderQR<Eigen::MatrixXd> QR(X);
+    if(rankCheck && (QR.rank() != d)) {
+      stop("OLS coefficients not produced because X is not full column rank.");
+    }
+    W = QR.solve(y);
+    Q = QR.householderQ() * Eigen::MatrixXd::Identity(n, d);
+    yhat = X * W;
+    diagH = Q.rowwise().squaredNorm();
+  }
+  else {
+    Eigen::HouseholderQR<Eigen::MatrixXd> QR(X);
+    W = QR.solve(y);
+    Q = QR.householderQ() * Eigen::MatrixXd::Identity(n, d);
+    yhat = X * W;
+    diagH = Q.rowwise().squaredNorm();
+  }
+  double CV = 0.0;
+  for (int i = 0; i < n; ++i) {
+    double error = y[i] - yhat[i];
+    double leverage = 1 - diagH[i];
+    CV += pow(error / leverage, 2);
+  }
+  CV /= static_cast<double>(n);
+  return CV;
+}
+
+// Leave-one-out cross-validation for ridge regression
+double loocvRidge(const int& n, const int& d, const bool& pivot, const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const double& lambda) {
+  Eigen::MatrixXd XT = X.transpose();
+  Eigen::MatrixXd XTX = XT * X;
+  XTX.diagonal().array() += lambda;
+  Eigen::MatrixXd CholInv(d, d);
+  if (pivot) {
+    Eigen::LDLT<Eigen::MatrixXd> Cholesky(XTX);
+    CholInv = Cholesky.solve(Eigen::MatrixXd::Identity(d, d));
+  }
+  else {
+    Eigen::LLT<Eigen::MatrixXd> Cholesky(XTX);
+    CholInv = Cholesky.solve(Eigen::MatrixXd::Identity(d, d));
+  }
+  Eigen::MatrixXd Hlambda = X * CholInv * XT;
+  Eigen::MatrixXd IHlambda = Eigen::MatrixXd::Identity(n, n) - Hlambda;
+  Eigen::MatrixXd IHdiaginv = IHlambda.diagonal().cwiseInverse().asDiagonal();
+  double CV = y.transpose() * IHlambda * IHdiaginv * IHdiaginv * IHlambda * y;
+  CV /= static_cast<double>(n);
+  return CV;
+}

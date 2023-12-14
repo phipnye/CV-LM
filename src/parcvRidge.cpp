@@ -50,12 +50,18 @@ List parcvRidge(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, const double
   if (K != K0) {
     warning("The value for K has changed. See returned value for the value of K used.");
   }
-  List Partitions = cvSetup(seed, n, K);
-  int ms = Partitions["ms"];
-  Eigen::VectorXi s = Partitions["s"];
-  NumericVector ns = Partitions["ns"];
-  cvRidgeWorker CVRW(y, X, lambda, s, ns, n, pivot);
-  RcppParallel::parallelReduce(0, ms, CVRW);
-  double CV = CVRW.MSE;
+  double CV = 0.0;
+  if (K == n) {
+    CV = loocvRidge(n, d, pivot, X, y, lambda);
+  }
+  else {
+    List Partitions = cvSetup(seed, n, K);
+    int ms = Partitions["ms"];
+    Eigen::VectorXi s = Partitions["s"];
+    NumericVector ns = Partitions["ns"];
+    cvRidgeWorker CVRW(y, X, lambda, s, ns, n, pivot);
+    RcppParallel::parallelReduce(0, ms, CVRW);
+    CV = CVRW.MSE;
+  }
   return List::create(_["K"] = K, _["CV"] = CV, _["seed"] = seed);
 }

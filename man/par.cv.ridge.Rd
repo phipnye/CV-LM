@@ -19,7 +19,7 @@
 
     \item{K}{Number of folds for cross-validation.}
 
-    \item{seed}{Seed for reproducibility.}
+    \item{seed}{Seed for reproducibility. Ignored when K equals the number of observations (N).}
 
     \item{pivot}{Boolean for determining whether to perform pivoting for Cholesky decomposition. Options are TRUE (higher stability but potentially slower) and FALSE (potentially faster but less stability).}
 }
@@ -76,7 +76,7 @@ all.equal(
 #    KCV.pivot.par 0.825754 0.879792 0.9093268 0.9122625 0.937225 1.042925    30
 #  KCV.nopivot.par 0.811157 0.854554 0.8898809 0.8828740 0.935031 0.991763    30
 
-# LOOCV
+# LOOCV (seed gets ignored & no difference between regular and parallelized cvLM)
 LOOCV.pivot <- cv.ridge(y, X, K = n.obs, lambda = 0.1, seed = 1L, pivot = TRUE)
 LOOCV.nopivot <- cv.ridge(y, X, K = n.obs, lambda = 0.1, seed = 1L, pivot = FALSE)
 LOOCV.pivot.par <- par.cv.ridge(y, X, K = n.obs, lambda = 0.1, seed = 1L, pivot = TRUE)
@@ -97,10 +97,10 @@ all.equal(
 # )
 # Unit: milliseconds
 #               expr      min       lq     mean   median       uq      max neval
-#        LOOCV.pivot 646.2455 656.4456 725.2745 712.4955 802.4751 878.1579    30
-#      LOOCV.nopivot 649.4966 683.6722 735.0574 719.2485 810.6322 843.2977    30
-#    LOOCV.pivot.par 191.2899 206.2856 221.8631 216.0781 223.5576 317.1762    30
-#  LOOCV.nopivot.par 185.6204 203.9079 240.3663 217.2960 295.6244 320.6512    30
+#        LOOCV.pivot 518.9731 530.2629 617.0509 538.6154 766.6501 818.0020    30
+#      LOOCV.nopivot 522.0560 535.2666 651.2714 580.7481 771.2185 803.6498    30
+#    LOOCV.pivot.par 517.6933 528.9713 625.0376 535.8320 765.0172 827.0741    30
+#  LOOCV.nopivot.par 517.4901 530.2807 653.1769 560.5338 784.4416 835.4171    30
 
 # Internally calls cv.lm if lambda is set to 0
 identical(

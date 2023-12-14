@@ -34,4 +34,10 @@ IntegerVector sampleCV(const IntegerVector& x, const int& size);
 // Setup partitions for CV
 List cvSetup(const int& seed, const int& n, const int& K);
 
+// LOOCV for linear regression
+double loocvLM(const int&n, const int& d, const String& pivot, const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const bool& rankCheck);
+
+// LOOCV for ridge regression
+double loocvRidge(const int& n, const int& d, const bool& pivot, const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const double& lambda);
+
 #endif
