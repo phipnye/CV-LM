@@ -41,16 +41,16 @@ Eigen::VectorXd OLScoef(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, cons
 // Generate Ridge regression coefficients
 Eigen::VectorXd Ridgecoef(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const bool& pivot, const double& lambda) {
   Eigen::MatrixXd XT = X.transpose();
-  Eigen::MatrixXd XTX = XT * X;
-  XTX.diagonal().array() += lambda;
+  Eigen::MatrixXd XTXlambda = XT * X;
+  XTXlambda.diagonal().array() += lambda;
   Eigen::VectorXd XTy = XT * y;
   Eigen::VectorXd W(X.cols());
   if (pivot) {
-    Eigen::LDLT<Eigen::MatrixXd> Cholesky(XTX);
+    Eigen::LDLT<Eigen::MatrixXd> Cholesky(XTXlambda);
     W = Cholesky.solve(XTy);
   }
   else {
-    Eigen::LLT<Eigen::MatrixXd> Cholesky(XTX);
+    Eigen::LLT<Eigen::MatrixXd> Cholesky(XTXlambda);
     W = Cholesky.solve(XTy);
   }
   return W;
@@ -134,8 +134,6 @@ List cvSetup(const int& seed, const int& n, const int& K) {
 
 // Leave-one-out cross-validation for linear regression
 double loocvLM(const int& n, const int& d, const String& pivot, const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const bool& rankCheck) {
-  Eigen::VectorXd yhat(n);
-  Eigen::VectorXd diagH(n);
   Eigen::VectorXd W(n);
   Eigen::MatrixXd Q(n, d);
   if (pivot == "full") {
@@ -145,8 +143,6 @@ double loocvLM(const int& n, const int& d, const String& pivot, const Eigen::Mat
     }
     W = QR.solve(y);
     Q = QR.matrixQ().leftCols(d);
-    yhat = X * W;
-    diagH = Q.rowwise().squaredNorm();
   }
   else if(pivot == "col") {
     Eigen::ColPivHouseholderQR<Eigen::MatrixXd> QR(X);
@@ -155,16 +151,14 @@ double loocvLM(const int& n, const int& d, const String& pivot, const Eigen::Mat
     }
     W = QR.solve(y);
     Q = QR.householderQ() * Eigen::MatrixXd::Identity(n, d);
-    yhat = X * W;
-    diagH = Q.rowwise().squaredNorm();
   }
   else {
     Eigen::HouseholderQR<Eigen::MatrixXd> QR(X);
     W = QR.solve(y);
     Q = QR.householderQ() * Eigen::MatrixXd::Identity(n, d);
-    yhat = X * W;
-    diagH = Q.rowwise().squaredNorm();
   }
+  Eigen::VectorXd yhat = X * W;
+  Eigen::VectorXd diagH = Q.rowwise().squaredNorm();
   double CV = 0.0;
   for (int i = 0; i < n; ++i) {
     double error = y[i] - yhat[i];
@@ -178,15 +172,15 @@ double loocvLM(const int& n, const int& d, const String& pivot, const Eigen::Mat
 // Leave-one-out cross-validation for ridge regression
 double loocvRidge(const int& n, const int& d, const bool& pivot, const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const double& lambda) {
   Eigen::MatrixXd XT = X.transpose();
-  Eigen::MatrixXd XTX = XT * X;
-  XTX.diagonal().array() += lambda;
+  Eigen::MatrixXd XTXlambda = XT * X;
+  XTXlambda.diagonal().array() += lambda;
   Eigen::MatrixXd CholInv(d, d);
   if (pivot) {
-    Eigen::LDLT<Eigen::MatrixXd> Cholesky(XTX);
+    Eigen::LDLT<Eigen::MatrixXd> Cholesky(XTXlambda);
     CholInv = Cholesky.solve(Eigen::MatrixXd::Identity(d, d));
   }
   else {
-    Eigen::LLT<Eigen::MatrixXd> Cholesky(XTX);
+    Eigen::LLT<Eigen::MatrixXd> Cholesky(XTXlambda);
     CholInv = Cholesky.solve(Eigen::MatrixXd::Identity(d, d));
   }
   Eigen::MatrixXd Hlambda = X * CholInv * XT;
