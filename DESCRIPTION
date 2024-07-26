@@ -1,12 +1,12 @@
 Package: cvLM
 Type: Package
 Title: Cross-Validation for Linear & Ridge Regression Models
-Version: 1.0.1
-Date: 2024-07-14
+Version: 1.0.2
+Date: 2024-07-26
 Author: Philip Nye
 Maintainer: Philip Nye <phipnye@proton.me>
 Description: Efficient implementations of cross-validation techniques for linear and ridge regression models, leveraging C++ code with Rcpp, RcppParallel, and Eigen libraries. It supports leave-one-out, generalized, and K-fold cross-validation methods, utilizing Eigen matrices for high performance.
 License: MIT + file LICENSE
-Imports: stats, Rcpp (>= 1.0.13), RcppParallel (>= 5.1.8), RcppEigen (>= 0.3.4.0.0)
+Imports: stats, Rcpp (>= 1.0.13), RcppParallel (>= 5.1.8)
 LinkingTo: Rcpp, RcppParallel, RcppEigen
 SystemRequirements: GNU make

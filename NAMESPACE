@@ -1,5 +1,4 @@
 useDynLib(cvLM, .registration=TRUE)
-import(RcppEigen)
 importFrom(Rcpp, evalCpp)
 importFrom(RcppParallel, RcppParallelLibs)
 importFrom(stats, AIC, BIC, coef, family, gaussian, is.empty.model, model.frame, model.matrix, model.response,

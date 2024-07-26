@@ -14,7 +14,7 @@ r.squared     <- function(model) summary(model)[["r.squared"]]
 adj.r.squared <- function(model) summary(model)[["adj.r.squared"]]
 fstatistic    <- function(model) summary(model)[[c("fstatistic", "value")]]
 
-coef.df <- function(model.summary, n.digits, big.mark, type = c("latex", "html")) {
+coeff.df <- function(model.summary, n.digits, big.mark, type = c("latex", "html")) {
   type <- match.arg(type)
   coefs <- coef(model.summary)
   
@@ -54,10 +54,10 @@ latex <- function(models, n.digits, big.mark, caption, spacing, stats, cv.args) 
   
   summs <- lapply(models, summary)
   
-  reg.df <- coef.df(summs[[1L]], n.digits, big.mark, "latex")
+  reg.df <- coeff.df(summs[[1L]], n.digits, big.mark, "latex")
   colnames(reg.df) <- c("Predictor", model.names[1L])
   for (i in seq_along(summs)[-1L]) {
-    temp.df <- coef.df(summs[[i]], n.digits, big.mark, "latex")
+    temp.df <- coeff.df(summs[[i]], n.digits, big.mark, "latex")
     colnames(temp.df) <- c("Predictor", model.names[i])
     reg.df <- merge(reg.df, temp.df, by = "Predictor", all = TRUE, sort = FALSE)
   }
@@ -145,10 +145,10 @@ html <- function(models, n.digits, big.mark, caption, spacing, stats, cv.args) {
   
   summs <- lapply(models, summary)
   
-  reg.df <- coef.df(summs[[1L]], n.digits, big.mark, "html")
+  reg.df <- coeff.df(summs[[1L]], n.digits, big.mark, "html")
   colnames(reg.df) <- c("Predictor", model.names[1L])
   for (i in seq_along(summs)[-1L]) {
-    temp.df <- coef.df(summs[[i]], n.digits, big.mark, "html")
+    temp.df <- coeff.df(summs[[i]], n.digits, big.mark, "html")
     colnames(temp.df) <- c("Predictor", model.names[i])
     reg.df <- merge(reg.df, temp.df, by = "Predictor", all = TRUE, sort = FALSE)
   }

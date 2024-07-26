@@ -48,8 +48,6 @@ cvLM(object, ...)
 }
 \author{
   Philip Nye, \email{phipnye@proton.me}
-  
-  Maintainer: Philip Nye, \email{phipnye@proton.me}
 }
 \references{
   Bates D, Eddelbuettel D (2013). "Fast and Elegant Numerical Linear Algebra Using the RcppEigen Package." Journal of Statistical Software, 52(5), 1-24. \doi{10.18637/jss.v052.i05}.
