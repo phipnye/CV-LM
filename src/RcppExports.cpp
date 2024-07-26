@@ -11,76 +11,26 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// cvLM
-List cvLM(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, int K, const int& seed, const String& pivot, const bool& rankCheck);
-RcppExport SEXP _cvLM_cvLM(SEXP ySEXP, SEXP XSEXP, SEXP KSEXP, SEXP seedSEXP, SEXP pivotSEXP, SEXP rankCheckSEXP) {
+// cvLMrcpp
+DataFrame cvLMrcpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, const int& K0, const double& lambda, const bool& generalized, const int& seed, const int& nthreads);
+RcppExport SEXP _cvLM_cvLMrcpp(SEXP ySEXP, SEXP XSEXP, SEXP K0SEXP, SEXP lambdaSEXP, SEXP generalizedSEXP, SEXP seedSEXP, SEXP nthreadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
     Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
-    Rcpp::traits::input_parameter< int >::type K(KSEXP);
-    Rcpp::traits::input_parameter< const int& >::type seed(seedSEXP);
-    Rcpp::traits::input_parameter< const String& >::type pivot(pivotSEXP);
-    Rcpp::traits::input_parameter< const bool& >::type rankCheck(rankCheckSEXP);
-    rcpp_result_gen = Rcpp::wrap(cvLM(y, X, K, seed, pivot, rankCheck));
-    return rcpp_result_gen;
-END_RCPP
-}
-// cvRidge
-List cvRidge(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, const double& lambda, int K, const int& seed, const bool& pivot);
-RcppExport SEXP _cvLM_cvRidge(SEXP ySEXP, SEXP XSEXP, SEXP lambdaSEXP, SEXP KSEXP, SEXP seedSEXP, SEXP pivotSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const int& >::type K0(K0SEXP);
     Rcpp::traits::input_parameter< const double& >::type lambda(lambdaSEXP);
-    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< const bool& >::type generalized(generalizedSEXP);
     Rcpp::traits::input_parameter< const int& >::type seed(seedSEXP);
-    Rcpp::traits::input_parameter< const bool& >::type pivot(pivotSEXP);
-    rcpp_result_gen = Rcpp::wrap(cvRidge(y, X, lambda, K, seed, pivot));
-    return rcpp_result_gen;
-END_RCPP
-}
-// parcvLM
-List parcvLM(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, int K, const int& seed, const String& pivot, const bool& rankCheck);
-RcppExport SEXP _cvLM_parcvLM(SEXP ySEXP, SEXP XSEXP, SEXP KSEXP, SEXP seedSEXP, SEXP pivotSEXP, SEXP rankCheckSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
-    Rcpp::traits::input_parameter< int >::type K(KSEXP);
-    Rcpp::traits::input_parameter< const int& >::type seed(seedSEXP);
-    Rcpp::traits::input_parameter< const String& >::type pivot(pivotSEXP);
-    Rcpp::traits::input_parameter< const bool& >::type rankCheck(rankCheckSEXP);
-    rcpp_result_gen = Rcpp::wrap(parcvLM(y, X, K, seed, pivot, rankCheck));
-    return rcpp_result_gen;
-END_RCPP
-}
-// parcvRidge
-List parcvRidge(const Eigen::VectorXd& y, const Eigen::MatrixXd& X, const double& lambda, int K, const int& seed, const bool& pivot);
-RcppExport SEXP _cvLM_parcvRidge(SEXP ySEXP, SEXP XSEXP, SEXP lambdaSEXP, SEXP KSEXP, SEXP seedSEXP, SEXP pivotSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
-    Rcpp::traits::input_parameter< const double& >::type lambda(lambdaSEXP);
-    Rcpp::traits::input_parameter< int >::type K(KSEXP);
-    Rcpp::traits::input_parameter< const int& >::type seed(seedSEXP);
-    Rcpp::traits::input_parameter< const bool& >::type pivot(pivotSEXP);
-    rcpp_result_gen = Rcpp::wrap(parcvRidge(y, X, lambda, K, seed, pivot));
+    Rcpp::traits::input_parameter< const int& >::type nthreads(nthreadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cvLMrcpp(y, X, K0, lambda, generalized, seed, nthreads));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_cvLM_cvLM", (DL_FUNC) &_cvLM_cvLM, 6},
-    {"_cvLM_cvRidge", (DL_FUNC) &_cvLM_cvRidge, 6},
-    {"_cvLM_parcvLM", (DL_FUNC) &_cvLM_parcvLM, 6},
-    {"_cvLM_parcvRidge", (DL_FUNC) &_cvLM_parcvRidge, 6},
+    {"_cvLM_cvLMrcpp", (DL_FUNC) &_cvLM_cvLMrcpp, 7},
     {NULL, NULL, 0}
 };
 
