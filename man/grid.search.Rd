@@ -43,7 +43,7 @@ grid.search(
   verbose = FALSE,  # Disable progress bar
 )
 
-\dontrun{
+\donttest{
 set.seed(1L)
 n <- 50002L
 

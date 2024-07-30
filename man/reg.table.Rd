@@ -40,7 +40,6 @@ reg.table(models, type = c("latex", "html"), split.size = 4L, n.digits = 3L,
   A character vector of length equal to the number of tables with each element containing the LaTeX or HTML code for a regression table.
 }
 \examples{
-\dontrun{
 data(mtcars)
 
 # Create a list of 6 different linear regression models with names
@@ -83,5 +82,4 @@ reg.table(
   K.vals = 5L,
   seed = 123L
 )
-}
 }
