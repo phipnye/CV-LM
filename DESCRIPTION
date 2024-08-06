@@ -9,3 +9,4 @@ License: MIT + file LICENSE
 Imports: stats, Rcpp (>= 1.0.13), RcppParallel (>= 5.1.8)
 LinkingTo: Rcpp, RcppParallel, RcppEigen
 SystemRequirements: GNU make
+URL: https://github.com/phipnye/CV-LM
