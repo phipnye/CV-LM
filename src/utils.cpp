@@ -51,7 +51,8 @@ double cost(const Eigen::VectorXd& y, const Eigen::VectorXd& yHat) {
 }
 
 // Generates fold assignments
-std::pair<Eigen::VectorXi, Eigen::VectorXd> cvSetup(const int seed, const int n,
+std::pair<Eigen::VectorXi, Eigen::VectorXi> cvSetup(const int seed,
+                                                    const int nrow,
                                                     const int k) {
   // Call back into R for sample and set.seed to guarantee the exact same
   // random partitions as boot::cv.glm (using C++ RNG would break
@@ -59,19 +60,19 @@ std::pair<Eigen::VectorXi, Eigen::VectorXd> cvSetup(const int seed, const int n,
   Rcpp::Function setSeed{"set.seed"};
   Rcpp::Function sampleR{"sample"};
   setSeed(seed);
-  const int repeats{static_cast<int>(std::ceil(static_cast<double>(n) / k))};
+  const int repeats{static_cast<int>(std::ceil(static_cast<double>(nrow) / k))};
   Rcpp::IntegerVector seqVec{Rcpp::rep(Rcpp::seq(1, k), repeats)};
-  Rcpp::IntegerVector sampled{sampleR(seqVec, n)};
-  Eigen::VectorXi s{Rcpp::as<Eigen::VectorXi>(sampled)};
-  Eigen::VectorXd ns{Eigen::VectorXd::Zero(k)};
+  Rcpp::IntegerVector sampled{sampleR(seqVec, nrow)};
+  Eigen::VectorXi foldIDs{Rcpp::as<Eigen::VectorXi>(sampled)};
+  Eigen::VectorXi foldSizes{Eigen::VectorXi::Zero(k)};
 
   // Store fold sizes to calculate the weighted CV estimate: sum((n_i / n) *
   // cost_i)
   for (int i{0}; i < k; ++i) {
-    ns(i) = (s.array() == (i + 1)).count();
+    foldSizes(i) = (foldIDs.array() == (i + 1)).count();
   }
 
-  return {s, ns};
+  return {foldIDs, foldSizes};
 }
 
 }  // namespace CV::Utils

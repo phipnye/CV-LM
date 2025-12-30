@@ -13,6 +13,6 @@ int kCheck(int n, int k0);
 double cost(const Eigen::VectorXd& y, const Eigen::VectorXd& yHat);
 
 // Generates fold assignments
-std::pair<Eigen::VectorXi, Eigen::VectorXd> cvSetup(int seed, int n, int k);
+std::pair<Eigen::VectorXi, Eigen::VectorXi> cvSetup(int seed, int n, int k);
 
 }  // namespace CV::Utils

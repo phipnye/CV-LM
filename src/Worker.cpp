@@ -14,21 +14,45 @@ namespace CV {
 // --- Base implementation
 
 BaseWorker::BaseWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                       const Eigen::VectorXi& s, const Eigen::VectorXd& ns,
-                       const int nrow)
-    : y{y}, x{x}, s{s}, ns{ns}, nrow{nrow}, mse{0.0} {}
+                       const Eigen::VectorXi& foldIDs,
+                       const Eigen::VectorXi& foldSizes, const int nrow)
+    : y{y},
+      x{x},
+      foldIDs{foldIDs},
+      foldSizes{foldSizes},
+      nrow{nrow},
+      mse{0.0} {}
 
 void BaseWorker::operator()(const std::size_t begin, const std::size_t end) {
-  for (std::size_t i{begin}; i < end; ++i) {
-    const int fold{static_cast<int>(i) + 1};
-    const auto inMask{s.array() != fold};
-    const auto outMask{s.array() == fold};
-    const Eigen::MatrixXd xTrain{x(inMask, Eigen::all)};
-    const Eigen::VectorXd yTrain{y(inMask)};
-    const Eigen::VectorXd beta{computeCoef(xTrain, yTrain)};
-    const Eigen::VectorXd yHat{x(outMask, Eigen::all) * beta};
-    const double cost{Utils::cost(y(outMask), yHat)};
-    const double alpha{ns[static_cast<Eigen::Index>(i)] / nrow};
+  for (std::size_t it{begin}; it < end; ++it) {
+    const int foldID{static_cast<int>(it) + 1};
+    const Eigen::Index itEigen{static_cast<Eigen::Index>(it)};
+    const int nIn{nrow - foldSizes[itEigen]};
+    const int nOut{static_cast<int>(foldSizes[itEigen])};
+
+    // Allocate index vectors for this fold
+    Eigen::VectorXi inIdxs(nIn);
+    Eigen::VectorXi outIdxs(nOut);
+
+    // Fill indices
+    Eigen::Index inIdx{0};
+    Eigen::Index outIdx{0};
+
+    for (Eigen::Index rowIdx{0}; rowIdx < nrow; ++rowIdx) {
+      if (foldIDs[rowIdx] == foldID) {
+        outIdxs[outIdx++] = rowIdx;
+      } else {
+        inIdxs[inIdx++] = rowIdx;
+      }
+    }
+
+    // Subset using the integer index vectors
+    const Eigen::VectorXd beta{computeCoef(x(inIdxs, Eigen::all), y(inIdxs))};
+    const Eigen::VectorXd yHat{x(outIdxs, Eigen::all) * beta};
+    const double cost{Utils::cost(y(outIdxs), yHat)};
+
+    // Calculate weight: (n_i / n)
+    const double alpha{static_cast<double>(foldSizes[itEigen]) / nrow};
     mse += (alpha * cost);
   }
 }
@@ -38,12 +62,13 @@ void BaseWorker::join(const BaseWorker& other) { mse += other.mse; }
 // --- OLS Implementation
 
 OLS::Worker::Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                    const Eigen::VectorXi& s, const Eigen::VectorXd& ns,
-                    int nrow)
-    : BaseWorker{y, x, s, ns, nrow} {}
+                    const Eigen::VectorXi& foldIDs,
+                    const Eigen::VectorXi& foldSizes, int nrow)
+    : BaseWorker{y, x, foldIDs, foldSizes, nrow} {}
 
 OLS::Worker::Worker(const OLS::Worker& other, RcppParallel::Split split)
-    : BaseWorker{other.y, other.x, other.s, other.ns, other.nrow} {}
+    : BaseWorker{other.y, other.x, other.foldIDs, other.foldSizes, other.nrow} {
+}
 
 Eigen::VectorXd OLS::Worker::computeCoef(const Eigen::MatrixXd& xTrain,
                                          const Eigen::VectorXd& yTrain) const {
@@ -53,12 +78,12 @@ Eigen::VectorXd OLS::Worker::computeCoef(const Eigen::MatrixXd& xTrain,
 // --- Ridge Implementation
 
 Ridge::Worker::Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                      double lambda, const Eigen::VectorXi& s,
-                      const Eigen::VectorXd& ns, int nrow)
-    : BaseWorker{y, x, s, ns, nrow}, lambda{lambda} {}
+                      double lambda, const Eigen::VectorXi& foldIDs,
+                      const Eigen::VectorXi& foldSizes, int nrow)
+    : BaseWorker{y, x, foldIDs, foldSizes, nrow}, lambda{lambda} {}
 
 Ridge::Worker::Worker(const Ridge::Worker& other, RcppParallel::Split split)
-    : BaseWorker{other.y, other.x, other.s, other.ns, other.nrow},
+    : BaseWorker{other.y, other.x, other.foldIDs, other.foldSizes, other.nrow},
       lambda{other.lambda} {}
 
 Eigen::VectorXd Ridge::Worker::computeCoef(

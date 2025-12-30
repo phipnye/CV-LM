@@ -41,13 +41,14 @@ Eigen::VectorXd coef(const Eigen::VectorXd& y, const Eigen::MatrixXd& x) {
 double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x) {
   const Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr{x};
   const Eigen::VectorXd yHat{x * qr.solve(y)};
-  // tr(H) = rank(X). leverage here is (1 - trace(H)/n)
+  // tr(H) = rank(X)
+  // leverage here is (1 - trace(H)/n)
   const double leverage{1.0 - (static_cast<double>(qr.rank()) / x.rows())};
   return ((y - yHat).array() / leverage).square().mean();
 }
 
 // Leave-one-out cross-validation for linear regression (leverages shortcut:
-// LOO_error_i = e_i / (1 - h_ii))
+// LOOCV_error_i = e_i / (1 - h_ii))
 double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x) {
   const Eigen::Index nrow{x.rows()};
   const Eigen::Index ncol{x.cols()};
@@ -69,10 +70,10 @@ double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x) {
   }
 
   // Leverage values: h_ii = [X(X'X)^-1 X']_ii. Using QR (X = QR),
-  // H = Q Q' so h_ii = sum_{j=1}^{rank} q_{ij}^2 (rowwise squared norm of thin
+  // H = QQ' so h_ii = sum_{j=1}^{rank} q_{ij}^2 (rowwise squared norm of thin
   // Q)
-  const Eigen::MatrixXd fullQ{qr.householderQ()};
-  const Eigen::VectorXd diagH{(fullQ.leftCols(rank)).rowwise().squaredNorm()};
+  const Eigen::MatrixXd qThin{qr.householderQ().setLength(rank)};
+  const Eigen::VectorXd diagH{qThin.rowwise().squaredNorm()};
 
   // LOOCV Formula: mean((res / (1 - h))^2)
   return ((y - x * w).array() / (1.0 - diagH.array())).square().mean();
@@ -81,11 +82,11 @@ double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x) {
 // Multi-threaded CV for linear regression
 double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
              const int seed, const int nThreads) {
-  const int n{static_cast<int>(x.rows())};
-  const auto [s, ns]{CV::Utils::cvSetup(seed, n, k)};
+  const int nrow{static_cast<int>(x.rows())};
+  const auto [foldIDs, foldSizes]{CV::Utils::cvSetup(seed, nrow, k)};
 
   // Initialize the worker with data and partition info
-  Worker cvWorker{y, x, s, ns, n};
+  Worker cvWorker{y, x, foldIDs, foldSizes, nrow};
 
   if (nThreads > 1) {
     RcppParallel::parallelReduce(0, k, cvWorker, 1, nThreads);

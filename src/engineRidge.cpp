@@ -125,11 +125,11 @@ double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 // Multi-threaded CV for ridge regression
 double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
              const double lambda, const int seed, const int nThreads) {
-  const int n{static_cast<int>(x.rows())};
-  const auto [s, ns]{CV::Utils::cvSetup(seed, n, k)};
+  const int nrow{static_cast<int>(x.rows())};
+  const auto [foldIDs, foldSizes]{CV::Utils::cvSetup(seed, nrow, k)};
 
   // Initialize the worker
-  Worker cvWorker{y, x, lambda, s, ns, n};
+  Worker cvWorker{y, x, lambda, foldIDs, foldSizes, nrow};
 
   if (nThreads > 1) {
     RcppParallel::parallelReduce(0, k, cvWorker, 1, nThreads);
