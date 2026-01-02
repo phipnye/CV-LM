@@ -4,10 +4,6 @@
 
 namespace CV::Ridge {
 
-// Generate Ridge regression coefficients
-Eigen::VectorXd coef(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                     double lambda);
-
 // Generalized cross-validation for ridge regression
 double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, double lambda);
 

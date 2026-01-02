@@ -6,11 +6,21 @@
 
 namespace CV::Utils {
 
-// Confirm valid value for K
-int kCheck(int n, int k0);
+// RAII for setting rounding mode
+class ScopedRoundingMode {
+  int oldMode_;
 
-// Calculate MSE
-double cost(const Eigen::VectorXd& y, const Eigen::VectorXd& yHat);
+ public:
+  explicit ScopedRoundingMode(int mode);
+  ~ScopedRoundingMode();
+  ScopedRoundingMode(const ScopedRoundingMode&) = delete;
+  ScopedRoundingMode& operator=(const ScopedRoundingMode&) = delete;
+  ScopedRoundingMode(const ScopedRoundingMode&&) = delete;
+  ScopedRoundingMode& operator=(ScopedRoundingMode&&) = delete;
+};
+
+// Confirm valid value for K
+int kCheck(int nrow, int k0);
 
 // Generates fold assignments
 std::pair<Eigen::VectorXi, Eigen::VectorXi> cvSetup(int seed, int n, int k);

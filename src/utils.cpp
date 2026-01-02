@@ -5,20 +5,27 @@
 
 namespace CV::Utils {
 
+// RAII guard for the rounding mode
+ScopedRoundingMode::ScopedRoundingMode(int mode) : oldMode_{std::fegetround()} {
+  std::fesetround(mode);
+}
+
+ScopedRoundingMode::~ScopedRoundingMode() { std::fesetround(oldMode_); }
+
 // Confirm valid value for K
 // Mimics boot::cv.glm logic to find a K that evenly (or nearly evenly) divides
 // n (uses FE_TONEAREST to match R's banker rounding)
-int kCheck(const int n, const int k0) {
+int kCheck(const int nrow, const int k0) {
   // LOOCV
-  if (n == k0) {
+  if (nrow == k0) {
     return k0;
   }
 
-  const int oldMode{std::fegetround()};
-  std::fesetround(FE_TONEAREST);  // round to nearest, ties to even
-  const double nDbl{static_cast<double>(n)};
-  const int nHalf{n / 2};
-  int closestK{n};
+  const ScopedRoundingMode roundGuard{
+      FE_TONEAREST};  // round to nearest, ties to even
+  const double nDbl{static_cast<double>(nrow)};
+  const int nHalf{nrow / 2};
+  int closestK{nrow};
   int minDiff{closestK - k0};
 
   // Consider k values between n and 2 (iterates through possible denominators
@@ -30,7 +37,6 @@ int kCheck(const int n, const int k0) {
     const int absDiff{std::abs(k0 - kVal)};
 
     if (absDiff == 0) {
-      std::fesetround(oldMode);
       return k0;
     }
 
@@ -41,13 +47,7 @@ int kCheck(const int n, const int k0) {
   }
 
   Rcpp::warning("K has been changed from %d to %d.", k0, closestK);
-  std::fesetround(oldMode);
   return closestK;
-}
-
-// Calculate MSE: standard cost function = mean((y - yhat)^2)
-double cost(const Eigen::VectorXd& y, const Eigen::VectorXd& yHat) {
-  return (y - yHat).array().square().mean();
 }
 
 // Generates fold assignments
@@ -68,8 +68,8 @@ std::pair<Eigen::VectorXi, Eigen::VectorXi> cvSetup(const int seed,
 
   // Store fold sizes to calculate the weighted CV estimate: sum((n_i / n) *
   // cost_i)
-  for (int i{0}; i < k; ++i) {
-    foldSizes(i) = (foldIDs.array() == (i + 1)).count();
+  for (int fold{0}; fold < k; ++fold) {
+    foldSizes(fold) = (foldIDs.array() == (fold + 1)).count();
   }
 
   return {foldIDs, foldSizes};

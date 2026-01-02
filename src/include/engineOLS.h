@@ -4,9 +4,6 @@
 
 namespace CV::OLS {
 
-// Generate OLS coefficients
-Eigen::VectorXd coef(const Eigen::VectorXd& y, const Eigen::MatrixXd& x);
-
 // Generalized cross-validation for linear regression
 double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x);
 

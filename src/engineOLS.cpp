@@ -9,84 +9,84 @@
 #include "include/utils.h"
 
 namespace CV::OLS {
-// Generate OLS coefficients
-// Solves for beta using QR decomposition (X = QRP') (handles the math for both
-// full-rank and rank-deficient cases)
-Eigen::VectorXd coef(const Eigen::VectorXd& y, const Eigen::MatrixXd& x) {
-  const Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr{x};  // X = QRP'
-  const Eigen::Index ncol{x.cols()};
-  const Eigen::Index rank{qr.rank()};
-
-  if (rank == ncol) {  // full-rank case: beta = (X'X)^-1 X'y
-    return qr.solve(y);
-  }
-
-  // Handle rank-deficiency: Solve via the triangular R matrix for the
-  // identified rank and then map back to original column space via the
-  // permutation matrix P (even though the qr solve method can handle
-  // rank-deficient matrices, this mimic's how base R's lm() handles rank
-  // deficiency by zeroing out redundant coefficients)
-  Eigen::VectorXd w{Eigen::VectorXd::Zero(ncol)};
-  const auto sol{qr.householderQ().transpose() * y};
-  w.head(rank) = qr.matrixQR()
-                     .topLeftCorner(rank, rank)
-                     .triangularView<Eigen::Upper>()
-                     .solve(sol.head(rank));
-  return qr.colsPermutation() * w;
-}
 
 // Generalized cross-validation for linear regression
-// Math shortcut: GCV = MSE / (1 - trace(H)/n)^2 (for OLS, trace(H) is just the
-// rank of X)
+// Math shortcut: GCV = MSE / (1 - trace(H)/n)^2 = RSS / (n * (1 -
+// trace(H)/n)^2) (for OLS, trace(H) is just the rank of X)
 double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x) {
   const Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr{x};
-  const Eigen::VectorXd yHat{x * qr.solve(y)};
+  const Eigen::Index rank{qr.rank()};
+
   // tr(H) = rank(X)
-  // leverage here is (1 - trace(H)/n)
-  const double leverage{1.0 - (static_cast<double>(qr.rank()) / x.rows())};
-  return ((y - yHat).array() / leverage).square().mean();
+  // leverage is (1 - trace(H)/n)
+  const Eigen::Index nrow{x.rows()};
+  const double leverage{1.0 - (static_cast<double>(qr.rank()) / nrow)};
+
+  // Calculate RSS (using the full n x n orthogonal matrix Q, we transform y
+  // into Q'y we partition the squared norm of y into two components:
+  // ||y||^2 = ||(Q'y).head(rank)||^2 + ||(Q'y).tail(n - rank)||^2
+  // where the first term is the ESS the second term is the RSS
+  Eigen::VectorXd qty{y};
+  qty.applyOnTheLeft(qr.householderQ().transpose());
+  const double rss{qty.tail(nrow - rank).squaredNorm()};
+  return (rss / (nrow * leverage * leverage));
 }
 
 // Leave-one-out cross-validation for linear regression (leverages shortcut:
 // LOOCV_error_i = e_i / (1 - h_ii))
 double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x) {
-  const Eigen::Index nrow{x.rows()};
-  const Eigen::Index ncol{x.cols()};
-  Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr{x};
+  const Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr{x};
   const Eigen::Index rank{qr.rank()};
-  Eigen::VectorXd w{Eigen::VectorXd::Zero(ncol)};
 
-  if (rank == ncol) {  // full-rank
-    w = qr.solve(y);
+  // No longer warning about rank-deficiency which differs from the first
+  // release
+
+  // Compute OLS coefficients (matching R's lm's behavior of zeroing out
+  // redundant covariate coefficients in the presence of rank-deficiency)
+  const Eigen::Index ncol{x.cols()};
+  Eigen::VectorXd beta(ncol);
+  const auto rView{
+      qr.matrixR().topLeftCorner(rank, rank).triangularView<Eigen::Upper>()};
+
+  // Full-rank
+  if (rank == ncol) {
+    beta.noalias() = qr.solve(y);
   } else {  // rank-deficient
-    Rcpp::warning("Rank-deficient design matrix (rank %d < cols %d).", rank,
-                  ncol);
-    const Eigen::VectorXd sol{qr.householderQ().transpose() * y};
-    w.head(rank) = qr.matrixQR()
-                       .topLeftCorner(rank, rank)
-                       .triangularView<Eigen::Upper>()
-                       .solve(sol.head(rank));
-    w = qr.colsPermutation() * w;
+    Eigen::VectorXd qty{y};
+    qty.applyOnTheLeft(qr.householderQ().transpose());
+    beta.setZero();
+    beta.head(rank).noalias() = rView.solve(qty.head(rank));
+
+    // Permute back to original column order
+    beta.applyOnTheLeft(qr.colsPermutation());
   }
 
   // Leverage values: h_ii = [X(X'X)^-1 X']_ii. Using QR (X = QR),
   // H = QQ' so h_ii = sum_{j=1}^{rank} q_{ij}^2 (rowwise squared norm of thin
-  // Q)
-  const Eigen::MatrixXd qThin{qr.householderQ().setLength(rank)};
-  const Eigen::VectorXd diagH{qThin.rowwise().squaredNorm()};
+  // Q) - instead of evaluating a potentially large Q matrix, we can use
+  // backward solving on the triangular matrix R to solve for R^-T X' = Q'
+  const Eigen::VectorXd diagH{
+      rView.transpose()
+          .solve((x * qr.colsPermutation()).leftCols(rank).transpose())
+          .colwise()
+          .squaredNorm()};
 
-  // LOOCV Formula: mean((res / (1 - h))^2)
-  return ((y - x * w).array() / (1.0 - diagH.array())).square().mean();
+  // LOOCV Formula: mean((res / (1 - h))^2) - NOTE: May be worth adding a max to
+  // prevent zero-division in high leverage instances
+  return ((y - (x * beta)).array() / (1.0 - diagH.array())).square().mean();
 }
 
 // Multi-threaded CV for linear regression
 double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
              const int seed, const int nThreads) {
-  const int nrow{static_cast<int>(x.rows())};
-  const auto [foldIDs, foldSizes]{CV::Utils::cvSetup(seed, nrow, k)};
+  // Setup folds and reorder data so each fold is a contiguous block, allowing
+  // the worker to generate views of the data rather than copying
+  const Eigen::Index nrow{x.rows()};
+  const auto [foldIDs,
+              foldSizes]{CV::Utils::cvSetup(seed, static_cast<int>(nrow), k)};
 
   // Initialize the worker with data and partition info
-  Worker cvWorker{y, x, foldIDs, foldSizes, nrow};
+  Worker cvWorker{y, x, foldIDs, foldSizes, nrow, x.cols()};
 
   if (nThreads > 1) {
     RcppParallel::parallelReduce(0, k, cvWorker, 1, nThreads);
@@ -95,7 +95,7 @@ double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
     cvWorker(0, k);
   }
 
-  return cvWorker.mse;
+  return cvWorker.mse_;
 }
 
 }  // namespace CV::OLS
