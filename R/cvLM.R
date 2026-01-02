@@ -4,6 +4,22 @@
 
 is.linear.reg.model <- function(model) inherits(model, "lm") && all.equal(family(model), gaussian())
 
+prepare.data <- function(y, X, mt, lambda) {
+  # Identify the intercept column
+  intercept.col <- which(colnames(X) == "(Intercept)")
+
+  if (length(intercept.col) > 0L) {
+    # Center y
+    y <- y - mean(y)
+    # Drop intercept and center X columns
+    # When you center y and X, the regression line is forced to pass through
+    # the origin of the new coordinate system, where the intercept is
+    # mathematically guaranteed to be zero, hence a column of ones is not needed anymore
+    X <- scale(X[, -intercept.col, drop = FALSE], scale = FALSE)
+  }
+  return(list(y = y, X = X))
+}
+
 validate.args <- function(K.vals, lambda, generalized, data, seed, n.threads) {
   if (any(is.na(K.vals)) || !is.integer(K.vals) || length(K.vals) < 1L) {
     stop("Argument 'K.vals' must be a non-empty integer vector.", call. = FALSE)
@@ -36,12 +52,12 @@ validate.args <- function(K.vals, lambda, generalized, data, seed, n.threads) {
   return(invisible())
 }
 
-eval.cvLM <- function(y, X, K.vals, lambda, generalized, seed, n.threads) {
+eval.cvLM <- function(y, X, K.vals, lambda, generalized, seed, n.threads, centered = FALSE) {
   cvs <- vapply(
     K.vals,
     function(K) {
       n.threads <- min(K, n.threads)
-      return(cv.lm.rcpp(y, X, K, lambda, generalized, seed, n.threads))
+      return(cv.lm.rcpp(y, X, K, lambda, generalized, seed, n.threads, centered))
     },
     numeric(1L),
     USE.NAMES = FALSE
@@ -78,6 +94,13 @@ cvLM.formula <- function(object, data, subset, na.action, K.vals = 10L, lambda =
 
   X <- model.matrix(mt, mf)
   y <- model.response(mf, "double")
+
+  # We only center if it's a Ridge model (lambda > 0)
+  if (lambda > 0 && attr(mt, "intercept") == 1L) {
+    prep <- prepare.data(y, X, mt, lambda) # center the data and drop the intercept column
+    return(eval.cvLM(prep[["y"]], prep[["X"]], K.vals, lambda, generalized, seed, n.threads, centered = TRUE))
+  }
+
   return(eval.cvLM(y, X, K.vals, lambda, generalized, seed, n.threads))
 }
 
@@ -94,6 +117,13 @@ cvLM.lm <- function(object, data, K.vals = 10L, lambda = 0, generalized = FALSE,
   mt <- attr(mf, "terms")
   X <- model.matrix(mt, mf)
   y <- model.response(mf, "double")
+
+  # We only center if it's a Ridge model (lambda > 0)
+  if (lambda > 0 && attr(mt, "intercept") == 1L) {
+    prep <- prepare.data(y, X, mt, lambda) # center the data and drop the intercept column
+    return(eval.cvLM(prep[["y"]], prep[["X"]], K.vals, lambda, generalized, seed, n.threads, centered = TRUE))
+  }
+
   return(eval.cvLM(y, X, K.vals, lambda, generalized, seed, n.threads))
 }
 
@@ -102,7 +132,7 @@ cvLM.glm <- function(object, data, K.vals = 10L, lambda = 0, generalized = FALSE
   if (!is.linear.reg.model(object)) {
     stop("cvLM only performs cross-validation for linear and ridge regression models.", call. = FALSE)
   }
-  
+
   class(object) <- c("lm", setdiff(class(object), "lm"))
   NextMethod("cvLM")
 }

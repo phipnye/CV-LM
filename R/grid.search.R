@@ -37,32 +37,6 @@ grid.search <- function(formula, data, subset, na.action, K = 10L, generalized =
 
   X <- model.matrix(mt, mf)
   y <- model.response(mf, "double")
-
-  lambda.seq <- seq(0, max.lambda, by = precision)
-
-  if (!(max.lambda %in% lambda.seq)) {
-    warning("Provided 'max.lambda': ", max.lambda, " omitted from consideration. Consider adjusting max.lambda to be a multiple of the precision.")
-  }
-
-  if (verbose) {
-    pb <- txtProgressBar(min = 0, max = length(lambda.seq), style = 3)
-
-    cvs <- vapply(seq_along(lambda.seq), function(i) {
-      lambda <- lambda.seq[i]
-      cv <- cv.lm.rcpp(y, X, K, lambda, generalized, seed, n.threads)
-      setTxtProgressBar(pb, i)
-      return(cv)
-    }, numeric(1L))
-
-    close(pb)
-  } else {
-    cvs <- vapply(lambda.seq, function(lambda) {
-      return(cv.lm.rcpp(y, X, K, lambda, generalized, seed, n.threads))
-    }, numeric(1L))
-  }
-
-  opt.lambda <- lambda.seq[which.min(cvs)]
-  opt.cv <- min(cvs)
-
+  
   return(list(CV = opt.cv, lambda = opt.lambda))
 }

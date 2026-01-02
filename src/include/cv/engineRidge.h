@@ -5,10 +5,12 @@
 namespace CV::Ridge {
 
 // Generalized cross-validation for ridge regression
-double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, double lambda);
+double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, double lambda,
+           bool centered);
 
 // Leave-one-out cross-validation for ridge regression
-double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, double lambda);
+double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, double lambda,
+             bool centered);
 
 // Multi-threaded CV for ridge regression
 double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, int k,

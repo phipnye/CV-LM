@@ -1,12 +1,12 @@
 // [[Rcpp::depends(RcppEigen, RcppParallel)]]
 
-#include "include/engineRidge.h"
+#include "include/cv/engineRidge.h"
 
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
-#include "include/Worker.h"
-#include "include/utils.h"
+#include "include/cv/Worker.h"
+#include "include/cv/utils.h"
 
 namespace CV::Ridge {
 
@@ -14,7 +14,7 @@ namespace CV::Ridge {
 // Math shortcut: GCV(lambda) = MSE(lambda) / (1 - trace(H(lambda))/n)^2 =
 // RSS(lambda) / (n * (1 - trace(H(lambda))/n)^2)
 double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-           const double lambda) {
+           const double lambda, const bool centered) {
   // Generate X'X + lambda * I
   const Eigen::Index ncol{x.cols()};
   Eigen::MatrixXd xtxLambda{Eigen::MatrixXd::Zero(ncol, ncol)};
@@ -36,7 +36,10 @@ double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   // trace(H) = trace(X * (X'X + lambda*I)^-1 * X')
   // Using trace(AB) = trace(BA) and X'X = (X'X + lambda * I) - lambda * I
   // trace(H) = p - lambda * trace((X'X + lambda*I)^-1)
-  const double leverage{1.0 - ((ncol - lambda * xtxLambdaInv.trace()) / nrow)};
+  // If the data was centered in R, we need to add one to capture the dropped
+  // intercept column
+  const double leverage{
+      1.0 - (((ncol + centered) - lambda * xtxLambdaInv.trace()) / nrow)};
 
   // Calculate RSS = ||y - X * beta||^2 where beta = (X'X + lambda * I)^-1 * X'y
   const double rss{(y - (x * (xtxLambdaInv * (xT * y)))).squaredNorm()};
@@ -45,7 +48,7 @@ double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 
 // Leave-one-out cross-validation for ridge regression
 double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-             const double lambda) {
+             const double lambda, const bool centered) {
   // Generate X'X + lambda * I
   const Eigen::Index ncol{x.cols()};
   Eigen::MatrixXd xtxLambda{Eigen::MatrixXd::Zero(ncol, ncol)};
@@ -65,6 +68,10 @@ double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   // h_ii = x_i' * (X'X + lambda * I)^-1 * x_i, compute this for all i via
   // row-wise dot product of X and (X * (X'X + lambda * I)^-1)
   const auto diagH{(x * xtxLambdaInv).cwiseProduct(x).rowwise().sum()};
+  
+  if (centered) {
+    diagH.array() += (1.0 / x.rows());
+  }
 
   // LOOCV Formula: mean((res / (1 - h))^2) - NOTE: May be worth adding a max to
   // prevent zero-division in high leverage instances

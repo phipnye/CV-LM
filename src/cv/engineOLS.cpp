@@ -1,12 +1,12 @@
 // [[Rcpp::depends(RcppEigen, RcppParallel)]]
 
-#include "include/engineOLS.h"
+#include "include/cv/engineOLS.h"
 
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
-#include "include/Worker.h"
-#include "include/utils.h"
+#include "include/cv/Worker.h"
+#include "include/cv/utils.h"
 
 namespace CV::OLS {
 

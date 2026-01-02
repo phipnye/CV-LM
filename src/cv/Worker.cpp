@@ -1,6 +1,6 @@
 // [[Rcpp::depends(RcppEigen, RcppParallel)]]
 
-#include "include/Worker.h"
+#include "include/cv/Worker.h"
 
 #include <RcppEigen.h>
 #include <RcppParallel.h>
