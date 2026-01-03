@@ -167,31 +167,3 @@ bench::mark(
   check = FALSE, 
   iterations = 100L
 )
-
-# Ridge regression --------------------------------------------------------------------------------------
-
-library(g.ridge)
-
-bench::mark(
-  g.ridge = GCV(cbind(1, X), y, k = 0.84375)[1, 1],
-  cvLM = cvLM(y ~ ., data = df, K.vals = n, lambda = 0.84375, generalized = TRUE, n.threads = n.threads)$CV
-)
-
-## ---------------------------
-## 2. Rank-Deficient Matrix Ridge
-## ---------------------------
-
-bench::mark(
-  g.ridge = GCV(cbind(1, X.rd), y.rd, k = 23.34354)[1, 1],
-  cvLM = cvLM(y ~ ., data = df.rd, K.vals = n.rd, lambda = 23.34354, generalized = TRUE, n.threads = n.threads)$CV
-)
-
-## ---------------------------
-## 3. Ill-Conditioned Matrix Ridge
-## ---------------------------
-
-bench::mark(
-  g.ridge = GCV(cbind(1, X.ill), y.ill, k = 1e-6)[1, 1],
-  cvLM = cvLM(y ~ ., data = df.ill, K.vals = n.ill, lambda = 1e-6, generalized = TRUE, n.threads = n.threads)$CV,
-  check = TRUE
-)

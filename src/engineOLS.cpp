@@ -1,12 +1,12 @@
 // [[Rcpp::depends(RcppEigen, RcppParallel)]]
 
-#include "include/cv/engineOLS.h"
+#include "include/engineOLS.h"
 
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
-#include "include/cv/Worker.h"
-#include "include/cv/utils.h"
+#include "include/CVWorker.h"
+#include "include/utils.h"
 
 namespace CV::OLS {
 
@@ -50,12 +50,12 @@ double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x) {
 
   // Full-rank
   if (rank == ncol) {
-    beta.noalias() = qr.solve(y);
+    beta = qr.solve(y);
   } else {  // rank-deficient
     Eigen::VectorXd qty{y};
     qty.applyOnTheLeft(qr.householderQ().transpose());
     beta.setZero();
-    beta.head(rank).noalias() = rView.solve(qty.head(rank));
+    beta.head(rank) = rView.solve(qty.head(rank));
 
     // Permute back to original column order
     beta.applyOnTheLeft(qr.colsPermutation());
@@ -86,16 +86,16 @@ double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
               foldSizes]{CV::Utils::cvSetup(seed, static_cast<int>(nrow), k)};
 
   // Initialize the worker with data and partition info
-  Worker cvWorker{y, x, foldIDs, foldSizes, nrow, x.cols()};
+  CVWorker worker{y, x, foldIDs, foldSizes, nrow, x.cols()};
 
   if (nThreads > 1) {
-    RcppParallel::parallelReduce(0, k, cvWorker, 1, nThreads);
+    RcppParallel::parallelReduce(0, k, worker, 1, nThreads);
   } else {
     // Explicitly call the worker's loop for the full range if single-threaded
-    cvWorker(0, k);
+    worker(0, k);
   }
 
-  return cvWorker.mse_;
+  return worker.mse_;
 }
 
 }  // namespace CV::OLS

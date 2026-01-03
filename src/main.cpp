@@ -3,9 +3,9 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
 
-#include "include/cv/engineOLS.h"
-#include "include/cv/engineRidge.h"
-#include "include/cv/utils.h"
+#include "include/engineOLS.h"
+#include "include/engineRidge.h"
+#include "include/utils.h"
 
 // [[Rcpp::export(name="cv.lm.rcpp")]]
 double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
@@ -33,8 +33,9 @@ double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                 : CV::Ridge::parCV(y, x, k, lambda, seed, nThreads);
 }
 
-// [[Rcpp::export(name="grid.search.rcpp")]]
-Rcpp::List gridSearch(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                      const int k0, const double maxLambda,
-                      const double precision, const bool generalized,
-                      const int seed, const int nThreads) {}
+// // [[Rcpp::export(name="grid.search.rcpp")]]
+// Rcpp::List gridSearch(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+//                       const int k0, const double maxLambda,
+//                       const double precision, const bool generalized,
+//                       const int seed, const int nThreads, const bool centered) {
+// }
