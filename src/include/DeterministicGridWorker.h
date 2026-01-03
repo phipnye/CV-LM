@@ -11,23 +11,24 @@ namespace Grid {
 // Base class for searching grid of deterministic CV (LOOCV and GCV) results
 struct DeterministicGridWorker : public RcppParallel::Worker {
   // Common data members
-  const double maxLambda_;
-  const double precision_;
-  const bool centered_;
+  const Eigen::VectorXd& lambdas_;
   const Eigen::ArrayXd& eigenValsSq_;
   const Eigen::VectorXd& uty_;
   const Eigen::Index nrow_;
+  const bool centered_;
+
+  // Accumulator (pair of doubles for the [lambda, CV])
   std::pair<double, double> results_;
 
   // Thread-local buffer for repeated denominator computations
   Eigen::ArrayXd denom_;
 
   // Ctor
-  explicit DeterministicGridWorker(double maxLambda, double precision,
-                                   bool centered,
+  explicit DeterministicGridWorker(const Eigen::VectorXd& lambdas,
                                    const Eigen::ArrayXd& eigenValsSq,
                                    const Eigen::VectorXd& uty,
-                                   Eigen::Index nrow);
+                                   const Eigen::Index nrow,
+                                   const bool centered);
 
   virtual ~DeterministicGridWorker() override = default;
 
@@ -41,16 +42,18 @@ struct GCVGridWorker : public DeterministicGridWorker {
   const Eigen::ArrayXd& utySq_;
 
   // Ctor
-  explicit GCVGridWorker(double maxLambda, double precision, bool centered,
+  explicit GCVGridWorker(const Eigen::VectorXd& lambdas,
                          const Eigen::ArrayXd& eigenValsSq,
-                         const Eigen::VectorXd& uty, Eigen::Index nrow,
-                         double rssNull, const Eigen::ArrayXd& utySq);
+                         const Eigen::VectorXd& uty, const Eigen::Index nrow,
+                         const bool centered, const Eigen::ArrayXd& utySq,
+                         const double rssNull);
 
   // Split ctor
-  explicit GCVGridWorker(const GCVGridWorker& other, RcppParallel::Split split);
+  explicit GCVGridWorker(const GCVGridWorker& other,
+                         const RcppParallel::Split split);
 
   // RcppParallel requires an operator() to perform the work
-  void operator()(std::size_t begin, std::size_t end) override;
+  void operator()(const std::size_t begin, const std::size_t end) override;
 };
 
 struct LOOCVGridWorker : public DeterministicGridWorker {
@@ -65,19 +68,19 @@ struct LOOCVGridWorker : public DeterministicGridWorker {
   Eigen::VectorXd resid_;
 
   // Ctor
-  explicit LOOCVGridWorker(double maxLambda, double precision, bool centered,
+  explicit LOOCVGridWorker(const Eigen::VectorXd& lambdas,
                            const Eigen::ArrayXd& eigenValsSq,
-                           const Eigen::VectorXd& uty, Eigen::Index nrow,
-                           const Eigen::VectorXd& yNull,
+                           const Eigen::VectorXd& uty, const Eigen::Index nrow,
+                           const bool centered, const Eigen::VectorXd& yNull,
                            const Eigen::MatrixXd& u,
                            const Eigen::MatrixXd& uSq);
 
   // Split ctor
   explicit LOOCVGridWorker(const LOOCVGridWorker& other,
-                           RcppParallel::Split split);
+                           const RcppParallel::Split split);
 
   // RcppParallel requires an operator() to perform the work
-  void operator()(std::size_t begin, std::size_t end) override;
+  void operator()(const std::size_t begin, const std::size_t end) override;
 };
 
 };  // namespace Grid

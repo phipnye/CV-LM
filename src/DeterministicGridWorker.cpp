@@ -5,23 +5,21 @@
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
+#include <cstddef>
 #include <limits>
-#include <utility>
 
 namespace Grid {
 
 // --- Base implementation
 
 DeterministicGridWorker::DeterministicGridWorker(
-    double maxLambda, double precision, bool centered,
-    const Eigen::ArrayXd& eigenValsSq, const Eigen::VectorXd& uty,
-    const Eigen::Index nrow)
-    : maxLambda_{maxLambda},
-      precision_{precision},
-      centered_{centered},
+    const Eigen::VectorXd& lambdas, const Eigen::ArrayXd& eigenValsSq,
+    const Eigen::VectorXd& uty, const Eigen::Index nrow, const bool centered)
+    : lambdas_{lambdas},
       eigenValsSq_{eigenValsSq},
       uty_{uty},
       nrow_{nrow},
+      centered_{centered},
       results_{std::numeric_limits<double>::infinity(), 0.0},
       denom_(eigenValsSq.size()) {}
 
@@ -33,29 +31,29 @@ void DeterministicGridWorker::join(const DeterministicGridWorker& other) {
 
 // --- GCV Implementation
 
-GCVGridWorker::GCVGridWorker(double maxLambda, double precision, bool centered,
+GCVGridWorker::GCVGridWorker(const Eigen::VectorXd& lambdas,
                              const Eigen::ArrayXd& eigenValsSq,
                              const Eigen::VectorXd& uty,
-                             const Eigen::Index nrow, const double rssNull,
-                             const Eigen::ArrayXd& utySq)
-    : DeterministicGridWorker{maxLambda,   precision, centered,
-                              eigenValsSq, uty,       nrow},
-      rssNull_{rssNull},
-      utySq_{utySq} {}
+                             const Eigen::Index nrow, const bool centered,
+                             const Eigen::ArrayXd& utySq, const double rssNull)
+    : DeterministicGridWorker{lambdas, eigenValsSq, uty, nrow, centered},
+      utySq_{utySq},
+      rssNull_{rssNull} {}
 
-GCVGridWorker::GCVGridWorker(const GCVGridWorker& other, RcppParallel::Split)
-    : DeterministicGridWorker{other.maxLambda_, other.precision_,
-                              other.centered_,  other.eigenValsSq_,
-                              other.uty_,       other.nrow_},
-      rssNull_{other.rssNull_},
-      utySq_{other.utySq_} {}
+GCVGridWorker::GCVGridWorker(const GCVGridWorker& other,
+                             const RcppParallel::Split)
+    : DeterministicGridWorker{other.lambdas_, other.eigenValsSq_, other.uty_,
+                              other.nrow_, other.centered_},
+      utySq_{other.utySq_},
+      rssNull_{other.rssNull_} {}
 
-void GCVGridWorker::operator()(std::size_t begin, std::size_t end) {
-  for (std::size_t step{begin}; step < end; ++step) {
-    const double lambda{static_cast<double>(step) * precision_};
-
+void GCVGridWorker::operator()(const std::size_t begin, const std::size_t end) {
+  for (Eigen::Index lambdaIdx{static_cast<Eigen::Index>(begin)},
+       endIdx{static_cast<Eigen::Index>(end)};
+       lambdaIdx < endIdx; ++lambdaIdx) {
     // Calculate trace(H) = sum(eigenVals^2 / (eigenVals^2 + lambda))
     // TO DO: Handle case of collinearity with zero shrinkage
+    const double lambda{lambdas_[lambdaIdx]};
     denom_ = eigenValsSq_ + lambda;
     double traceH{(eigenValsSq_ / denom_).sum()};
 
@@ -82,15 +80,14 @@ void GCVGridWorker::operator()(std::size_t begin, std::size_t end) {
 
 // --- LOOCV Implementation
 
-LOOCVGridWorker::LOOCVGridWorker(double maxLambda, double precision,
-                                 bool centered,
+LOOCVGridWorker::LOOCVGridWorker(const Eigen::VectorXd& lambdas,
                                  const Eigen::ArrayXd& eigenValsSq,
-                                 const Eigen::VectorXd& uty, Eigen::Index nrow,
+                                 const Eigen::VectorXd& uty,
+                                 const Eigen::Index nrow, const bool centered,
                                  const Eigen::VectorXd& yNull,
                                  const Eigen::MatrixXd& u,
                                  const Eigen::MatrixXd& uSq)
-    : DeterministicGridWorker{maxLambda,   precision, centered,
-                              eigenValsSq, uty,       nrow},
+    : DeterministicGridWorker{lambdas, eigenValsSq, uty, nrow, centered},
       yNull_{yNull},
       u_{u},
       uSq_{uSq},
@@ -99,10 +96,9 @@ LOOCVGridWorker::LOOCVGridWorker(double maxLambda, double precision,
       resid_(nrow_) {}
 
 LOOCVGridWorker::LOOCVGridWorker(const LOOCVGridWorker& other,
-                                 RcppParallel::Split)
-    : DeterministicGridWorker{other.maxLambda_, other.precision_,
-                              other.centered_,  other.eigenValsSq_,
-                              other.uty_,       other.nrow_},
+                                 const RcppParallel::Split)
+    : DeterministicGridWorker{other.lambdas_, other.eigenValsSq_, other.uty_,
+                              other.nrow_, other.centered_},
       yNull_{other.yNull_},
       u_{other.u_},
       uSq_{other.uSq_},
@@ -110,12 +106,15 @@ LOOCVGridWorker::LOOCVGridWorker(const LOOCVGridWorker& other,
       diagH_(other.diagH_.size()),
       resid_(other.resid_.size()) {}
 
-void LOOCVGridWorker::operator()(std::size_t begin, std::size_t end) {
-  for (std::size_t step{begin}; step < end; ++step) {
-    const double lambda{static_cast<double>(step) * precision_};
+void LOOCVGridWorker::operator()(const std::size_t begin,
+                                 const std::size_t end) {
+  for (Eigen::Index lambdaIdx{static_cast<Eigen::Index>(begin)},
+       endIdx{static_cast<Eigen::Index>(end)};
+       lambdaIdx < endIdx; ++lambdaIdx) {
     // TO DO: Handle case of collinearity with zero shrinkage
     // Calculate the diagonal of the Ridge shrinkage matrix = eigenVal_i^2 /
     // (eigenVal_i^2 + lambda)
+    const double lambda{lambdas_[lambdaIdx]};
     denom_ = eigenValsSq_ + lambda;  // denom_ is reused to avoid temporary
                                      // allocations and repeated computations
     diagD_ = eigenValsSq_ / denom_;

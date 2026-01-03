@@ -5,6 +5,8 @@
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
+#include <cstddef>
+
 #include "include/CVWorker.h"
 #include "include/utils.h"
 
@@ -27,7 +29,7 @@ double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   // in-place)
   const Eigen::LDLT<Eigen::Ref<Eigen::MatrixXd>> ldlt{xtxLambda};
 
-  // Explicitly evaluate the inverse matrix Z = (X'X + lambda*I)^-1 to be used
+  // Evaluate the inverse matrix (X'X + lambda*I)^-1 to be used
   // for both the trace calculation and the ridge coefficients
   Eigen::MatrixXd xtxLambdaInv{Eigen::MatrixXd::Identity(ncol, ncol)};
   ldlt.solveInPlace(xtxLambdaInv);  // returns true (no need to check)
@@ -44,10 +46,9 @@ double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
     traceH += 1.0;
   }
 
-  const double leverage{1.0 - (traceH / nrow)};
-
   // Calculate RSS = ||y - X * beta||^2 where beta = (X'X + lambda * I)^-1 * X'y
   const double rss{(y - (x * (xtxLambdaInv * (xT * y)))).squaredNorm()};
+  const double leverage{1.0 - (traceH / nrow)};
   return rss / (nrow * leverage * leverage);
 }
 
@@ -61,13 +62,10 @@ double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   const auto xT{x.transpose()};
   xtxLambda.selfadjointView<Eigen::Lower>().rankUpdate(xT);
 
-  // Factorize and compute inverse Z = (X'X + lambda * I)^-1
+  // Factorize and compute inverse (X'X + lambda * I)^-1
   const Eigen::LDLT<Eigen::Ref<Eigen::MatrixXd>> ldlt{xtxLambda};
   Eigen::MatrixXd xtxLambdaInv{Eigen::MatrixXd::Identity(ncol, ncol)};
-  xtxLambdaInv = ldlt.solve(xtxLambdaInv);
-
-  // Compute ridge coefficients beta = Z * X'y
-  const auto beta{xtxLambdaInv * (xT * y)};
+  ldlt.solveInPlace(xtxLambdaInv);  // returns true (no need to check)
 
   // Compute diagonal of hat matrix H = X * (X'X + lambda * I)^-1 * X'
   // h_ii = x_i' * (X'X + lambda * I)^-1 * x_i, compute this for all i via
@@ -75,31 +73,35 @@ double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   Eigen::ArrayXd diagH{
       (x * xtxLambdaInv).cwiseProduct(x).rowwise().sum().array()};
 
+  // If the data was centered in R, we need to add 1/n to the diagonal entries
+  // to capture the dropped intercept column
   if (centered) {
     diagH += (1.0 / x.rows());
   }
 
   // LOOCV Formula: mean((res / (1 - h))^2) - NOTE: May be worth adding a max to
   // prevent zero-division in high leverage instances
-  return ((y - (x * beta)).array() / (1.0 - diagH)).square().mean();
+  return ((y - (x * xtxLambdaInv * (xT * y))).array() / (1.0 - diagH))
+      .square()
+      .mean();
 }
 
 // Multi-threaded CV for ridge regression
 double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
              const double lambda, const int seed, const int nThreads) {
   // Setup folds and reorder data
-  const Eigen::Index nrow{x.rows()};
-  const auto [foldIDs,
-              foldSizes]{CV::Utils::cvSetup(seed, static_cast<int>(nrow), k)};
+  const auto [foldIDs, foldSizes]{CV::Utils::cvSetup(seed, x.rows(), k)};
 
   // Initialize the worker
-  CVWorker worker{y, x, lambda, foldIDs, foldSizes, nrow, x.cols()};
+  CVWorker worker{y, x, lambda, foldIDs, foldSizes};
+  constexpr std::size_t begin{0};
+  const std::size_t end{static_cast<std::size_t>(k)};
 
   if (nThreads > 1) {
-    RcppParallel::parallelReduce(0, k, worker, 1, nThreads);
+    RcppParallel::parallelReduce(begin, end, worker, 1, nThreads);
   } else {
-    // Sequentially execute the range [0, k)
-    worker(0, k);
+    // Explicitly call the worker's loop for the full range if single-threaded
+    worker(begin, end);
   }
 
   return worker.mse_;

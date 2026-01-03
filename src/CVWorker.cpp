@@ -13,36 +13,38 @@ namespace CV {
 
 BaseCVWorker::BaseCVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                            const Eigen::VectorXi& foldIDs,
-                           const Eigen::VectorXi& foldSizes,
-                           const Eigen::Index nrow, const Eigen::Index ncol)
+                           const Eigen::VectorXi& foldSizes)
     : y_{y},
       x_{x},
       foldIDs_{foldIDs},
       foldSizes_{foldSizes},
-      nrow_{nrow},
-      ncol_{ncol},
+      nrow_{x.rows()},
+      ncol_{x.cols()},
       mse_{0.0},
-      xTrain_(nrow, ncol),
-      yTrain_(nrow),
-      trainIdxs_(nrow),
-      testIdxs_(nrow),
-      beta_(ncol) {}
+      xTrain_(nrow_, ncol_),
+      yTrain_(nrow_),
+      trainIdxs_(nrow_),
+      testIdxs_(nrow_),
+      beta_(ncol_),
+      resid_(nrow_) {}
 
 void BaseCVWorker::operator()(const std::size_t begin, const std::size_t end) {
-  for (std::size_t fold{begin}; fold < end; ++fold) {
-    const int currentFold{static_cast<int>(fold) + 1};
-    const Eigen::Index testSize{foldSizes_[static_cast<Eigen::Index>(fold)]};
+  // Casting from std::size_t to int is safe here (end is the number of folds
+  // which is a 32-bit integer from R)
+  for (int foldID{static_cast<int>(begin)}, endID{static_cast<int>(end)};
+       foldID < endID; ++foldID) {
+    const Eigen::Index testSize{foldSizes_[foldID]};
     const Eigen::Index trainSize{nrow_ - testSize};
 
     // Prepare training and testing containers
     Eigen::Index tr{0};
     Eigen::Index ts{0};
 
-    for (Eigen::Index r{0}; r < nrow_; ++r) {
-      if (foldIDs_[r] == currentFold) {
-        testIdxs_[ts++] = r;
+    for (int row{0}; row < nrow_; ++row) {
+      if (foldIDs_[row] == foldID) {
+        testIdxs_[ts++] = row;
       } else {
-        trainIdxs_[tr++] = r;
+        trainIdxs_[tr++] = row;
       }
     }
 
@@ -51,21 +53,17 @@ void BaseCVWorker::operator()(const std::size_t begin, const std::size_t end) {
     yTrain_.head(trainSize) = y_(trainIdxs_.head(trainSize));
 
     // Fit the model
-    computeCoef(xTrain_.topRows(trainSize), yTrain_.topRows(trainSize));
+    computeBeta(xTrain_.topRows(trainSize), yTrain_.topRows(trainSize));
 
     // Evaluate performance on hold-out fold (MSE)
-    double cost{0.0};
-
-    for (Eigen::Index idx{0}; idx < testSize; ++idx) {
-      const Eigen::Index testIdx{testIdxs_[idx]};
-      const double resid{y_[testIdx] - x_.row(testIdx).dot(beta_)};
-      cost += (resid * resid);
-    }
+    resid_.head(testSize) = y_(testIdxs_.head(testSize));
+    resid_.head(testSize).noalias() -=
+        (x_(testIdxs_.head(testSize), Eigen::all) * beta_);
+    const double foldMSE{resid_.head(testSize).squaredNorm() / testSize};
 
     // Weighted MSE contribution
-    cost /= testSize;
     const double alpha{static_cast<double>(testSize) / nrow_};
-    mse_ += (alpha * cost);
+    mse_ += (alpha * foldMSE);
   }
 }
 
@@ -75,15 +73,13 @@ void BaseCVWorker::join(const BaseCVWorker& other) { mse_ += other.mse_; }
 
 OLS::CVWorker::CVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                         const Eigen::VectorXi& foldIDs,
-                        const Eigen::VectorXi& foldSizes,
-                        const Eigen::Index nrow, const Eigen::Index ncol)
-    : BaseCVWorker{y, x, foldIDs, foldSizes, nrow, ncol} {}
+                        const Eigen::VectorXi& foldSizes)
+    : BaseCVWorker{y, x, foldIDs, foldSizes} {}
 
-OLS::CVWorker::CVWorker(const OLS::CVWorker& other, RcppParallel::Split)
-    : BaseCVWorker{other.y_,         other.x_,    other.foldIDs_,
-                   other.foldSizes_, other.nrow_, other.ncol_} {}
+OLS::CVWorker::CVWorker(const OLS::CVWorker& other, const RcppParallel::Split)
+    : BaseCVWorker{other.y_, other.x_, other.foldIDs_, other.foldSizes_} {}
 
-void OLS::CVWorker::computeCoef(
+void OLS::CVWorker::computeBeta(
     const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
     const Eigen::Ref<const Eigen::VectorXd>& yTrain) {
   const Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr{xTrain};
@@ -124,20 +120,18 @@ void OLS::CVWorker::computeCoef(
 
 Ridge::CVWorker::CVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                           double lambda, const Eigen::VectorXi& foldIDs,
-                          const Eigen::VectorXi& foldSizes,
-                          const Eigen::Index nrow, const Eigen::Index ncol)
-    : BaseCVWorker(y, x, foldIDs, foldSizes, nrow, ncol),
+                          const Eigen::VectorXi& foldSizes)
+    : BaseCVWorker{y, x, foldIDs, foldSizes},
       lambda_{lambda},
-      xtxLambda_(ncol, ncol) {}
+      xtxLambda_(BaseCVWorker::ncol_, BaseCVWorker::ncol_) {}
 
 Ridge::CVWorker::CVWorker(const Ridge::CVWorker& other,
                           RcppParallel::Split split)
-    : BaseCVWorker(other.y_, other.x_, other.foldIDs_, other.foldSizes_,
-                   other.nrow_, other.ncol_),
+    : BaseCVWorker(other.y_, other.x_, other.foldIDs_, other.foldSizes_),
       lambda_{other.lambda_},
       xtxLambda_(other.ncol_, other.ncol_) {}
 
-void Ridge::CVWorker::computeCoef(
+void Ridge::CVWorker::computeBeta(
     const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
     const Eigen::Ref<const Eigen::VectorXd>& yTrain) {
   // Generate cross-products (re-use pre-allocated buffers)
@@ -162,7 +156,7 @@ void Ridge::CVWorker::computeCoef(
   // }
 
   // LDLT::solve supports in-place solves which we use here for efficiency
-  ldlt.solveInPlace(beta_);  // just returns true
+  ldlt.solveInPlace(beta_);  // just returns true (no need to check)
 }
 
 }  // namespace CV

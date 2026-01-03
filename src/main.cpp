@@ -11,15 +11,21 @@
 double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                 const int k0, const double lambda, const bool generalized,
                 const int seed, const int nThreads, const bool centered) {
-  const bool useOLS{lambda == 0.0};
+  const bool useOLS{lambda == 0.0};  // TO DO: Implement tolerance
 
   if (generalized) {
     return useOLS ? CV::OLS::gcv(y, x) : CV::Ridge::gcv(y, x, lambda, centered);
   }
 
+  // https://cran.r-project.org/doc/manuals/r-release/R-ints.html
+  // "Matrices are stored as vectors and so were also limited to 2^31-1
+  // elements. Now longer vectors are allowed on 64-bit platforms, matrices with
+  // more elements are supported provided that each of the dimensions is no more
+  // than 2^31-1."
+  const int nrow{static_cast<int>(x.rows())};
+
   // Preparation: Determine a valid number of folds as close to the passed
   // argument as possible
-  const int nrow{static_cast<int>(x.rows())};
   const int k{CV::Utils::kCheck(nrow, k0)};
 
   // LOOCV
@@ -37,5 +43,6 @@ double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 // Rcpp::List gridSearch(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 //                       const int k0, const double maxLambda,
 //                       const double precision, const bool generalized,
-//                       const int seed, const int nThreads, const bool centered) {
+//                       const int seed, const int nThreads, const bool
+//                       centered) {
 // }

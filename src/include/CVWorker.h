@@ -23,12 +23,12 @@ struct BaseCVWorker : public RcppParallel::Worker {
   Eigen::VectorXi trainIdxs_;
   Eigen::VectorXi testIdxs_;
   Eigen::VectorXd beta_;
+  Eigen::VectorXd resid_;
 
   // Ctor
   explicit BaseCVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                         const Eigen::VectorXi& foldIDs,
-                        const Eigen::VectorXi& foldSizes, Eigen::Index nrow,
-                        Eigen::Index ncol);
+                        const Eigen::VectorXi& foldSizes);
 
   // Virtaul dtor
   virtual ~BaseCVWorker() override = default;
@@ -38,12 +38,12 @@ struct BaseCVWorker : public RcppParallel::Worker {
   // 2) A join method which composes the operations of two worker instances that
   // were previously split Here we simply combine the accumulated value of the
   // instance we are being joined with to our own
-  void operator()(std::size_t begin, std::size_t end) override;
+  void operator()(const std::size_t begin, const std::size_t end) override;
   void join(const BaseCVWorker& other);
 
   // Derived classes implement the specific math engine (use Eigen::Ref to
   // accept expressions without forcing evaluation to MatrixXd)
-  virtual void computeCoef(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
+  virtual void computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                            const Eigen::Ref<const Eigen::VectorXd>& yTrain) = 0;
 };
 
@@ -53,14 +53,13 @@ struct CVWorker : public BaseCVWorker {
   // Ctor
   explicit CVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                     const Eigen::VectorXi& foldIDs,
-                    const Eigen::VectorXi& foldSizes, Eigen::Index nrow,
-                    Eigen::Index ncol);
+                    const Eigen::VectorXi& foldSizes);
 
   // Split ctor
-  explicit CVWorker(const CVWorker& other, RcppParallel::Split split);
+  explicit CVWorker(const CVWorker& other, const RcppParallel::Split split);
 
   // Compute OLS coefficients
-  void computeCoef(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
+  void computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                    const Eigen::Ref<const Eigen::VectorXd>& yTrain) override;
 };
 
@@ -69,7 +68,7 @@ struct CVWorker : public BaseCVWorker {
 namespace Ridge {
 
 struct CVWorker : public BaseCVWorker {
-  // (Additional) data member
+  // (Additional) data members
   const double lambda_;
 
   // Pre-allocated buffers for X'X + lambda * I
@@ -78,14 +77,13 @@ struct CVWorker : public BaseCVWorker {
   // Ctor
   explicit CVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                     double lambda, const Eigen::VectorXi& foldIDs,
-                    const Eigen::VectorXi& foldSizes, Eigen::Index nrow,
-                    Eigen::Index ncol);
+                    const Eigen::VectorXi& foldSizes);
 
   // Split ctor
-  explicit CVWorker(const CVWorker& other, RcppParallel::Split split);
+  explicit CVWorker(const CVWorker& other, const RcppParallel::Split split);
 
   // Compute ridge coefficients
-  void computeCoef(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
+  void computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                    const Eigen::Ref<const Eigen::VectorXd>& yTrain) override;
 };
 }  // namespace Ridge

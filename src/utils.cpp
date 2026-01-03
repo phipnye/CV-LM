@@ -6,7 +6,8 @@
 namespace CV::Utils {
 
 // RAII guard for the rounding mode
-ScopedRoundingMode::ScopedRoundingMode(int mode) : oldMode_{std::fegetround()} {
+ScopedRoundingMode::ScopedRoundingMode(const int mode)
+    : oldMode_{std::fegetround()} {
   std::fesetround(mode);
 }
 
@@ -56,7 +57,7 @@ std::pair<Eigen::VectorXi, Eigen::VectorXi> cvSetup(const int seed,
                                                     const int k) {
   // Call back into R for sample and set.seed to guarantee the exact same
   // random partitions as boot::cv.glm (using C++ RNG would break
-  // reproducibility against the R version)
+  // reproducibility)
   Rcpp::Function setSeed{"set.seed"};
   Rcpp::Function sampleR{"sample"};
   setSeed(seed);
@@ -64,12 +65,18 @@ std::pair<Eigen::VectorXi, Eigen::VectorXi> cvSetup(const int seed,
   Rcpp::IntegerVector seqVec{Rcpp::rep(Rcpp::seq(1, k), repeats)};
   Rcpp::IntegerVector sampled{sampleR(seqVec, nrow)};
   Eigen::VectorXi foldIDs{Rcpp::as<Eigen::VectorXi>(sampled)};
+
+  // R's internal documentation states the number of rows for a matrix are
+  // limited to 32-bit values so VectorXi is safe here
   Eigen::VectorXi foldSizes{Eigen::VectorXi::Zero(k)};
+
+  // Convert foldIDs to be zero-indexed
+  foldIDs.array() -= 1;
 
   // Store fold sizes to calculate the weighted CV estimate: sum((n_i / n) *
   // cost_i)
-  for (int fold{0}; fold < k; ++fold) {
-    foldSizes(fold) = (foldIDs.array() == (fold + 1)).count();
+  for (Eigen::Index idx{0}, size{foldIDs.size()}; idx < size; ++idx) {
+    ++foldSizes[foldIDs[idx]];
   }
 
   return {foldIDs, foldSizes};

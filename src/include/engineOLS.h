@@ -11,7 +11,7 @@ double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x);
 double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x);
 
 // Multi-threaded CV for linear regression
-double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, int k,
-             int seed, int nThreads);
+double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
+             const int seed, const int nThreads);
 
 }  // namespace CV::OLS

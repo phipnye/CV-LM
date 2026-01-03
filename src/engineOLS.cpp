@@ -5,6 +5,8 @@
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
+#include <cstddef>
+
 #include "include/CVWorker.h"
 #include "include/utils.h"
 
@@ -29,7 +31,7 @@ double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x) {
   Eigen::VectorXd qty{y};
   qty.applyOnTheLeft(qr.householderQ().transpose());
   const double rss{qty.tail(nrow - rank).squaredNorm()};
-  return (rss / (nrow * leverage * leverage));
+  return rss / (nrow * leverage * leverage);
 }
 
 // Leave-one-out cross-validation for linear regression (leverages shortcut:
@@ -41,7 +43,7 @@ double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x) {
   // No longer warning about rank-deficiency which differs from the first
   // release
 
-  // Compute OLS coefficients (matching R's lm's behavior of zeroing out
+  // Compute OLS coefficients (matching R's lm behavior of zeroing out
   // redundant covariate coefficients in the presence of rank-deficiency)
   const Eigen::Index ncol{x.cols()};
   Eigen::VectorXd beta(ncol);
@@ -81,18 +83,18 @@ double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
              const int seed, const int nThreads) {
   // Setup folds and reorder data so each fold is a contiguous block, allowing
   // the worker to generate views of the data rather than copying
-  const Eigen::Index nrow{x.rows()};
-  const auto [foldIDs,
-              foldSizes]{CV::Utils::cvSetup(seed, static_cast<int>(nrow), k)};
+  const auto [foldIDs, foldSizes]{CV::Utils::cvSetup(seed, x.rows(), k)};
 
   // Initialize the worker with data and partition info
-  CVWorker worker{y, x, foldIDs, foldSizes, nrow, x.cols()};
+  CVWorker worker{y, x, foldIDs, foldSizes};
+  constexpr std::size_t begin{0};
+  const std::size_t end{static_cast<std::size_t>(k)};
 
   if (nThreads > 1) {
-    RcppParallel::parallelReduce(0, k, worker, 1, nThreads);
+    RcppParallel::parallelReduce(begin, end, worker, 1, nThreads);
   } else {
     // Explicitly call the worker's loop for the full range if single-threaded
-    worker(0, k);
+    worker(begin, end);
   }
 
   return worker.mse_;
