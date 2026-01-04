@@ -26,4 +26,8 @@ int kCheck(const int nrow, const int k0);
 std::pair<Eigen::VectorXi, Eigen::VectorXi> cvSetup(const int seed, const int n,
                                                     const int k);
 
+// Determine the min and max test fold sizes
+std::pair<Eigen::Index, Eigen::Index> testSizeExtrema(
+    const Eigen::VectorXi& foldSizes);
+
 }  // namespace CV::Utils

@@ -83,10 +83,15 @@ double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
              const int seed, const int nThreads) {
   // Setup folds and reorder data so each fold is a contiguous block, allowing
   // the worker to generate views of the data rather than copying
-  const auto [foldIDs, foldSizes]{CV::Utils::cvSetup(seed, x.rows(), k)};
+  const Eigen::Index nrow{x.rows()};
+  const auto [foldIDs, foldSizes]{CV::Utils::cvSetup(
+      seed, static_cast<int>(nrow), k)};  // safe to cast to int
+
+  // Pre-calculate fold size bounds
+  const auto [minTestSize, maxTestSize]{CV::Utils::testSizeExtrema(foldSizes)};
 
   // Initialize the worker with data and partition info
-  CVWorker worker{y, x, foldIDs, foldSizes};
+  CVWorker worker{y, x, foldIDs, foldSizes, nrow - minTestSize, maxTestSize};
   constexpr std::size_t begin{0};
   const std::size_t end{static_cast<std::size_t>(k)};
 

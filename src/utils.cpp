@@ -1,5 +1,6 @@
 #include "include/utils.h"
 
+#include <algorithm>
 #include <cfenv>
 #include <cmath>
 
@@ -80,6 +81,14 @@ std::pair<Eigen::VectorXi, Eigen::VectorXi> cvSetup(const int seed,
   }
 
   return {foldIDs, foldSizes};
+}
+
+// Determine the min and max test fold sizes
+std::pair<Eigen::Index, Eigen::Index> testSizeExtrema(
+    const Eigen::VectorXi& foldSizes) {
+  const auto [minIt, maxIt]{std::minmax_element(
+      foldSizes.data(), foldSizes.data() + foldSizes.size())};
+  return {static_cast<Eigen::Index>(*minIt), static_cast<Eigen::Index>(*maxIt)};
 }
 
 }  // namespace CV::Utils

@@ -15,6 +15,8 @@ struct BaseCVWorker : public RcppParallel::Worker {
   const Eigen::VectorXi& foldSizes_;
   const Eigen::Index nrow_;
   const Eigen::Index ncol_;
+  const Eigen::Index maxTrainSize_;
+  const Eigen::Index maxTestSize_;
   double mse_;
 
   // Thread-local buffers
@@ -28,7 +30,9 @@ struct BaseCVWorker : public RcppParallel::Worker {
   // Ctor
   explicit BaseCVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                         const Eigen::VectorXi& foldIDs,
-                        const Eigen::VectorXi& foldSizes);
+                        const Eigen::VectorXi& foldSizes,
+                        const Eigen::Index maxTrainSize,
+                        const Eigen::Index maxTestSize);
 
   // Virtaul dtor
   virtual ~BaseCVWorker() override = default;
@@ -53,7 +57,9 @@ struct CVWorker : public BaseCVWorker {
   // Ctor
   explicit CVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                     const Eigen::VectorXi& foldIDs,
-                    const Eigen::VectorXi& foldSizes);
+                    const Eigen::VectorXi& foldSizes,
+                    const Eigen::Index maxTrainSize,
+                    const Eigen::Index maxTestSize);
 
   // Split ctor
   explicit CVWorker(const CVWorker& other, const RcppParallel::Split split);
@@ -77,7 +83,9 @@ struct CVWorker : public BaseCVWorker {
   // Ctor
   explicit CVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                     double lambda, const Eigen::VectorXi& foldIDs,
-                    const Eigen::VectorXi& foldSizes);
+                    const Eigen::VectorXi& foldSizes,
+                    const Eigen::Index maxTrainSize,
+                    const Eigen::Index maxTestSize);
 
   // Split ctor
   explicit CVWorker(const CVWorker& other, const RcppParallel::Split split);

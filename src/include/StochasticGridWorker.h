@@ -15,6 +15,8 @@ struct StochasticGridWorker : RcppParallel::Worker {
   const Eigen::VectorXi& foldSizes_;
   const Eigen::VectorXd& lambdas_;
   const Eigen::Index nrow_;
+  const Eigen::Index maxTrainSize_;
+  const Eigen::Index maxTestSize_;
 
   // Accumulator (vector of MSEs (one per lambda))
   Eigen::VectorXd mses_;
@@ -30,12 +32,11 @@ struct StochasticGridWorker : RcppParallel::Worker {
   Eigen::VectorXd resid_;
 
   // Ctor
-  explicit StochasticGridWorker(const Eigen::VectorXd& y,
-                                const Eigen::MatrixXd& x,
-                                const Eigen::VectorXi& foldIDs,
-                                const Eigen::VectorXi& foldSizes,
-                                const Eigen::VectorXd& lambdas,
-                                const Eigen::Index nrow);
+  explicit StochasticGridWorker(
+      const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+      const Eigen::VectorXi& foldIDs, const Eigen::VectorXi& foldSizes,
+      const Eigen::VectorXd& lambdas, const Eigen::Index nrow,
+      const Eigen::Index maxTrainSize, const Eigen::Index maxTestSize);
 
   // Split ctor
   StochasticGridWorker(const StochasticGridWorker& other,

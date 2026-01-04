@@ -7,27 +7,28 @@
 
 namespace Grid {
 // Ctor
-StochasticGridWorker::StochasticGridWorker(const Eigen::VectorXd& y,
-                                           const Eigen::MatrixXd& x,
-                                           const Eigen::VectorXi& foldIDs,
-                                           const Eigen::VectorXi& foldSizes,
-                                           const Eigen::VectorXd& lambdas,
-                                           const Eigen::Index nrow)
+StochasticGridWorker::StochasticGridWorker(
+    const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+    const Eigen::VectorXi& foldIDs, const Eigen::VectorXi& foldSizes,
+    const Eigen::VectorXd& lambdas, const Eigen::Index nrow,
+    const Eigen::Index maxTrainSize, const Eigen::Index maxTestSize)
     : y_{y},
       x_{x},
       foldIDs_{foldIDs},
       foldSizes_{foldSizes},
       lambdas_{lambdas},
       nrow_{nrow},
+      maxTrainSize_{maxTrainSize},
+      maxTestSize_{maxTestSize},
       mses_(Eigen::VectorXd::Zero(lambdas.size())),
-      trainIdxs_(nrow),
-      testIdxs_(nrow),
+      trainIdxs_(maxTrainSize_),
+      testIdxs_(maxTestSize_),
       uty_(x.cols()),
       eigenVals_(x.cols()),
       eigenValsSq_(x.cols()),
       diagD_(x.cols()),
       beta_(x.cols()),
-      resid_(nrow) {}
+      resid_(maxTestSize_) {}
 
 // Split ctor
 StochasticGridWorker::StochasticGridWorker(const StochasticGridWorker& other,
@@ -38,15 +39,17 @@ StochasticGridWorker::StochasticGridWorker(const StochasticGridWorker& other,
       foldSizes_{other.foldSizes_},
       lambdas_{other.lambdas_},
       nrow_{other.nrow_},
+      maxTrainSize_{other.maxTrainSize_},
+      maxTestSize_{other.maxTestSize_},
       mses_(Eigen::VectorXd::Zero(other.lambdas_.size())),
-      trainIdxs_(other.nrow_),
-      testIdxs_(other.nrow_),
+      trainIdxs_(maxTrainSize_),
+      testIdxs_(maxTestSize_),
       uty_(other.uty_.size()),
       eigenVals_(other.eigenVals_.size()),
       eigenValsSq_(other.eigenValsSq_.size()),
       diagD_(other.diagD_.size()),
       beta_(other.beta_.size()),
-      resid_(other.nrow_) {}
+      resid_(maxTestSize_) {}
 
 // Work operator
 void StochasticGridWorker::operator()(const std::size_t begin,

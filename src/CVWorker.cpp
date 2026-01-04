@@ -13,20 +13,24 @@ namespace CV {
 
 BaseCVWorker::BaseCVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                            const Eigen::VectorXi& foldIDs,
-                           const Eigen::VectorXi& foldSizes)
+                           const Eigen::VectorXi& foldSizes,
+                           const Eigen::Index maxTrainSize,
+                           const Eigen::Index maxTestSize)
     : y_{y},
       x_{x},
       foldIDs_{foldIDs},
       foldSizes_{foldSizes},
       nrow_{x.rows()},
       ncol_{x.cols()},
+      maxTrainSize_{maxTrainSize},
+      maxTestSize_{maxTestSize},
       mse_{0.0},
-      xTrain_(nrow_, ncol_),
-      yTrain_(nrow_),
-      trainIdxs_(nrow_),
-      testIdxs_(nrow_),
+      xTrain_(maxTrainSize_, ncol_),
+      yTrain_(maxTrainSize_),
+      trainIdxs_(maxTrainSize_),
+      testIdxs_(maxTestSize_),
       beta_(ncol_),
-      resid_(nrow_) {}
+      resid_(maxTestSize_) {}
 
 void BaseCVWorker::operator()(const std::size_t begin, const std::size_t end) {
   // Casting from std::size_t to int is safe here (end is the number of folds
@@ -53,7 +57,7 @@ void BaseCVWorker::operator()(const std::size_t begin, const std::size_t end) {
     yTrain_.head(trainSize) = y_(trainIdxs_.head(trainSize));
 
     // Fit the model
-    computeBeta(xTrain_.topRows(trainSize), yTrain_.topRows(trainSize));
+    computeBeta(xTrain_.topRows(trainSize), yTrain_.head(trainSize));
 
     // Evaluate performance on hold-out fold (MSE)
     resid_.head(testSize) = y_(testIdxs_.head(testSize));
@@ -73,11 +77,18 @@ void BaseCVWorker::join(const BaseCVWorker& other) { mse_ += other.mse_; }
 
 OLS::CVWorker::CVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                         const Eigen::VectorXi& foldIDs,
-                        const Eigen::VectorXi& foldSizes)
-    : BaseCVWorker{y, x, foldIDs, foldSizes} {}
+                        const Eigen::VectorXi& foldSizes,
+                        const Eigen::Index maxTrainSize,
+                        const Eigen::Index maxTestSize)
+    : BaseCVWorker{y, x, foldIDs, foldSizes, maxTrainSize, maxTestSize} {}
 
 OLS::CVWorker::CVWorker(const OLS::CVWorker& other, const RcppParallel::Split)
-    : BaseCVWorker{other.y_, other.x_, other.foldIDs_, other.foldSizes_} {}
+    : BaseCVWorker{other.y_,
+                   other.x_,
+                   other.foldIDs_,
+                   other.foldSizes_,
+                   other.maxTrainSize_,
+                   other.maxTestSize_} {}
 
 void OLS::CVWorker::computeBeta(
     const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
@@ -120,14 +131,21 @@ void OLS::CVWorker::computeBeta(
 
 Ridge::CVWorker::CVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                           double lambda, const Eigen::VectorXi& foldIDs,
-                          const Eigen::VectorXi& foldSizes)
-    : BaseCVWorker{y, x, foldIDs, foldSizes},
+                          const Eigen::VectorXi& foldSizes,
+                          const Eigen::Index maxTrainSize,
+                          const Eigen::Index maxTestSize)
+    : BaseCVWorker{y, x, foldIDs, foldSizes, maxTrainSize, maxTestSize},
       lambda_{lambda},
       xtxLambda_(BaseCVWorker::ncol_, BaseCVWorker::ncol_) {}
 
 Ridge::CVWorker::CVWorker(const Ridge::CVWorker& other,
                           RcppParallel::Split split)
-    : BaseCVWorker(other.y_, other.x_, other.foldIDs_, other.foldSizes_),
+    : BaseCVWorker{other.y_,
+                   other.x_,
+                   other.foldIDs_,
+                   other.foldSizes_,
+                   other.maxTrainSize_,
+                   other.maxTestSize_},
       lambda_{other.lambda_},
       xtxLambda_(other.ncol_, other.ncol_) {}
 
