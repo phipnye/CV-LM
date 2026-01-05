@@ -6,10 +6,10 @@
 #include <cstddef>
 #include <utility>
 
-namespace Grid {
+namespace Grid::Deterministic {
 
 // Base class for searching grid of deterministic CV (LOOCV and GCV) results
-struct DeterministicWorker : public RcppParallel::Worker {
+struct Worker : public RcppParallel::Worker {
   // Common data members
   const Eigen::VectorXd& lambdas_;
   const Eigen::ArrayXd& eigenValsSq_;
@@ -24,18 +24,17 @@ struct DeterministicWorker : public RcppParallel::Worker {
   Eigen::ArrayXd denom_;
 
   // Ctor
-  explicit DeterministicWorker(const Eigen::VectorXd& lambdas,
-                               const Eigen::ArrayXd& eigenValsSq,
-                               const Eigen::VectorXd& uty,
-                               const Eigen::Index nrow, const bool centered);
+  explicit Worker(const Eigen::VectorXd& lambdas,
+                  const Eigen::ArrayXd& eigenValsSq, const Eigen::VectorXd& uty,
+                  const Eigen::Index nrow, const bool centered);
 
-  virtual ~DeterministicWorker() override = default;
+  virtual ~Worker() override = default;
 
   // Join logic for parallel reduction
-  void join(const DeterministicWorker& other);
+  void join(const Worker& other);
 };
 
-struct GCVGridWorker : public DeterministicWorker {
+struct GCVGridWorker : public Worker {
   // Unique data members
   const double rssNull_;
   const Eigen::ArrayXd& utySq_;
@@ -55,7 +54,7 @@ struct GCVGridWorker : public DeterministicWorker {
   void operator()(const std::size_t begin, const std::size_t end) override;
 };
 
-struct LOOCVGridWorker : public DeterministicWorker {
+struct LOOCVGridWorker : public Worker {
   // Unique data members
   const Eigen::VectorXd& yNull_;
   const Eigen::MatrixXd& u_;
@@ -82,4 +81,4 @@ struct LOOCVGridWorker : public DeterministicWorker {
   void operator()(const std::size_t begin, const std::size_t end) override;
 };
 
-};  // namespace Grid
+};  // namespace Grid::Deterministic

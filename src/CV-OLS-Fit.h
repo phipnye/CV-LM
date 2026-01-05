@@ -4,7 +4,7 @@
 
 namespace CV::OLS {
 
-class OLSFit {
+class Fit {
   const Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr_;
   const Eigen::Index nrow_;
   const Eigen::Index rank_;
@@ -12,8 +12,8 @@ class OLSFit {
   Eigen::ArrayXd diagH_{};
 
  public:
-  explicit OLSFit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                  const bool needHat);
+  explicit Fit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+               const bool needHat);
 
   double gcv() const;
   double loocv() const;

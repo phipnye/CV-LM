@@ -25,8 +25,7 @@ bench::mark(
     set.seed(42)
     cv.glm(df, glm.fit, K = 10L)$delta[1L]
   },
-  cvLM = cvLM(glm.fit, data = df, K.vals = 10L, n.threads = n.threads, seed = 42L)$CV,
-  iterations = 10L
+  cvLM = cvLM(glm.fit, data = df, K.vals = 10L, n.threads = n.threads, seed = 42L)$CV
 )
 
 # 1b. LOOCV (fewer iterations since boot doesn't use close-formed solution)
@@ -43,8 +42,7 @@ bench::mark(
 bench::mark(
   cvLM.loocv = cvLM(glm.fit, data = df, K.vals = n, n.threads = n.threads, seed = 42L)$CV,
   cvLM.gcv = cvLM(glm.fit, data = df, K.vals = n, n.threads = n.threads, seed = 42L, generalized = TRUE)$CV,
-  check = FALSE, # not identical results
-  iterations = 100L
+  check = FALSE # not identical results
 )
 
 ## ---------------------------

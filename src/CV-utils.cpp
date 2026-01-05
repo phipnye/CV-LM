@@ -1,10 +1,10 @@
-#include "include/utils.h"
+#include "CV-utils.h"
 
 #include <algorithm>
 #include <cfenv>
 #include <cmath>
 
-namespace Utils {
+namespace CV {
 
 // RAII guard for the rounding mode
 ScopedRoundingMode::ScopedRoundingMode(const int mode)
@@ -53,9 +53,9 @@ int kCheck(const int nrow, const int k0) {
 }
 
 // Generates fold assignments
-std::pair<Eigen::VectorXi, Eigen::VectorXi> cvSetup(const int seed,
-                                                    const int nrow,
-                                                    const int k) {
+std::pair<Eigen::VectorXi, Eigen::VectorXi> setupFolds(const int seed,
+                                                       const int nrow,
+                                                       const int k) {
   // Call back into R for sample and set.seed to guarantee the exact same
   // random partitions as boot::cv.glm (using C++ RNG would break
   // reproducibility)
@@ -91,4 +91,4 @@ std::pair<Eigen::Index, Eigen::Index> testSizeExtrema(
   return {static_cast<Eigen::Index>(*minIt), static_cast<Eigen::Index>(*maxIt)};
 }
 
-}  // namespace Utils
+}  // namespace CV

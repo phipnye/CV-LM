@@ -1,11 +1,11 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
 
-#include "include/OLSFit.h"
-#include "include/RidgeFit.h"
-#include "include/WorkerFit.h"
-#include "include/cvEngine.h"
-#include "include/utils.h"
+#include "CV-OLS-Fit.h"
+#include "CV-Ridge-Fit.h"
+#include "CV-WorkerModel.h"
+#include "CV-engine.h"
+#include "CV-utils.h"
 
 // [[Rcpp::export(name="cv.lm.rcpp")]]
 double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
@@ -14,8 +14,8 @@ double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   const bool useOLS{lambda == 0.0};  // TO DO: Implement tolerance
 
   if (generalized) {
-    return useOLS ? CV::gcv<CV::OLS::OLSFit>(y, x)
-                  : CV::gcv<CV::Ridge::RidgeFit>(y, x, lambda, centered);
+    return useOLS ? CV::gcv<CV::OLS::Fit>(y, x)
+                  : CV::gcv<CV::Ridge::Fit>(y, x, lambda, centered);
   }
 
   // https://cran.r-project.org/doc/manuals/r-release/R-ints.html
@@ -27,18 +27,18 @@ double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 
   // Preparation: Determine a valid number of folds as close to the passed
   // argument as possible
-  const int k{Utils::kCheck(nrow, k0)};
+  const int k{CV::kCheck(nrow, k0)};
 
   // LOOCV
   if (k == nrow) {
-    return useOLS ? CV::loocv<CV::OLS::OLSFit>(y, x)
-                  : CV::loocv<CV::Ridge::RidgeFit>(y, x, lambda, centered);
+    return useOLS ? CV::loocv<CV::OLS::Fit>(y, x)
+                  : CV::loocv<CV::Ridge::Fit>(y, x, lambda, centered);
   }
 
   // K-fold CV
-  return useOLS ? CV::parCV<CV::OLS::WorkerFit>(y, x, k, seed, nThreads)
-                : CV::parCV<CV::Ridge::WorkerFit>(y, x, k, lambda, seed,
-                                                  nThreads, x.cols());
+  return useOLS ? CV::parCV<CV::OLS::WorkerModel>(y, x, k, seed, nThreads)
+                : CV::parCV<CV::Ridge::WorkerModel>(y, x, k, lambda, seed,
+                                                    nThreads, x.cols());
 }
 
 // // [[Rcpp::export(name="grid.search.rcpp")]]

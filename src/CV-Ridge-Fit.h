@@ -4,7 +4,7 @@
 
 namespace CV::Ridge {
 
-class RidgeFit {
+class Fit {
   const Eigen::Index nrow_;
   const Eigen::Index ncol_;
   const double lambda_;
@@ -14,10 +14,9 @@ class RidgeFit {
   Eigen::ArrayXd diagH_{};
 
  public:
-  explicit RidgeFit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                    const double lambda, const bool centered,
-                    const bool needHat);
-   
+  explicit Fit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+               const double lambda, const bool centered, const bool needHat);
+
   double gcv() const;
   double loocv() const;
 

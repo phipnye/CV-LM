@@ -1,4 +1,4 @@
-#include "include/WorkerFit.h"
+#include "CV-WorkerModel.h"
 
 #include <RcppEigen.h>
 
@@ -6,9 +6,9 @@ namespace CV {
 
 namespace OLS {
 
-void WorkerFit::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
-                            const Eigen::Ref<const Eigen::VectorXd>& yTrain,
-                            Eigen::VectorXd& beta) const {
+void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
+                              const Eigen::Ref<const Eigen::VectorXd>& yTrain,
+                              Eigen::VectorXd& beta) const {
   // Decompose training set into the for XP = QR
   const Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr{xTrain};
 
@@ -48,17 +48,17 @@ void WorkerFit::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
 
 namespace Ridge {
 
-WorkerFit::WorkerFit(const double lambda, const Eigen::Index ncol)
+WorkerModel::WorkerModel(const double lambda, const Eigen::Index ncol)
     : lambda_{lambda}, xtxLambda_(ncol, ncol) {}
 
 // Explicitly handle copying/splitting to ensure buffer allocation
-WorkerFit::WorkerFit(const WorkerFit& other)
+WorkerModel::WorkerModel(const WorkerModel& other)
     : lambda_{other.lambda_},
       xtxLambda_(other.xtxLambda_.rows(), other.xtxLambda_.cols()) {}
 
-void WorkerFit::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
-                            const Eigen::Ref<const Eigen::VectorXd>& yTrain,
-                            Eigen::VectorXd& beta) const {
+void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
+                              const Eigen::Ref<const Eigen::VectorXd>& yTrain,
+                              Eigen::VectorXd& beta) const {
   // Generate cross-products (re-use pre-allocated buffers)
   xtxLambda_.setZero();
   xtxLambda_.diagonal().fill(lambda_);

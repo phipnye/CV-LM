@@ -7,7 +7,7 @@
 
 namespace CV {
 
-template <typename FitType>
+template <typename Model>
 struct CVWorker : public RcppParallel::Worker {
   // Data members
   const Eigen::VectorXd& y_;
@@ -29,7 +29,7 @@ struct CVWorker : public RcppParallel::Worker {
   Eigen::VectorXd resid_;
 
   // Fit-specific data (e.g., lambda for Ridge)
-  FitType model_;
+  Model model_;
 
   // Main Ctor
   template <typename... Args>

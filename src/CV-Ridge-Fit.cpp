@@ -1,11 +1,11 @@
-#include "include/RidgeFit.h"
+#include "CV-Ridge-Fit.h"
 
 #include <RcppEigen.h>
 
 namespace CV::Ridge {
 
-RidgeFit::RidgeFit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                   const double lambda, const bool centered, const bool needHat)
+Fit::Fit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+         const double lambda, const bool centered, const bool needHat)
     : nrow_{x.rows()},
       ncol_{x.cols()},
       lambda_{lambda},
@@ -48,30 +48,28 @@ RidgeFit::RidgeFit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 // --- Public interface
 
 // GCV = MSE / (1 - trace(H)/n)^2
-double RidgeFit::gcv() const {
+double Fit::gcv() const {
   const double mrl{meanResidualLeverage()};
   return mse() / (mrl * mrl);
 }
 
 // LOOCV_error_i = e_i / (1 - h_ii))
-double RidgeFit::loocv() const {
+double Fit::loocv() const {
   return (resid_.array() / (1.0 - diagH_)).square().mean();
 }
 
 // --- Internal math
 
 // Sum of squared residuals
-double RidgeFit::rss() const { return resid_.squaredNorm(); }
+double Fit::rss() const { return resid_.squaredNorm(); }
 
 // Mean squared error
-double RidgeFit::mse() const { return rss() / nrow_; }
+double Fit::mse() const { return rss() / nrow_; }
 
 // Mean residual leverage = (1 - trace(H)/n)
-double RidgeFit::meanResidualLeverage() const {
-  return 1.0 - (traceH() / nrow_);
-}
+double Fit::meanResidualLeverage() const { return 1.0 - (traceH() / nrow_); }
 
-double RidgeFit::traceH() const {
+double Fit::traceH() const {
   // trace(H) = trace(X * (X'X + lambda*I)^-1 * X')
   // Using trace(AB) = trace(BA) and X'X = (X'X + lambda * I) - lambda * I
   // trace(H) = p - lambda * trace((X'X + lambda*I)^-1)

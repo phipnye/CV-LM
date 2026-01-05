@@ -1,16 +1,15 @@
-#include "include/StochasticWorker.h"
+#include "Grid-Stochastic-Worker.h"
 
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
-namespace Grid {
+namespace Grid::Stochastic {
 
 // Ctor
-StochasticWorker::StochasticWorker(
-    const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-    const Eigen::VectorXi& foldIDs, const Eigen::VectorXi& foldSizes,
-    const Eigen::VectorXd& lambdas, const Eigen::Index nrow,
-    const Eigen::Index maxTrainSize, const Eigen::Index maxTestSize)
+Worker::Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+               const Eigen::VectorXi& foldIDs, const Eigen::VectorXi& foldSizes,
+               const Eigen::VectorXd& lambdas, const Eigen::Index nrow,
+               const Eigen::Index maxTrainSize, const Eigen::Index maxTestSize)
     : y_{y},
       x_{x},
       foldIDs_{foldIDs},
@@ -30,8 +29,7 @@ StochasticWorker::StochasticWorker(
       resid_(maxTestSize_) {}
 
 // Split ctor
-StochasticWorker::StochasticWorker(const StochasticWorker& other,
-                                   const RcppParallel::Split)
+Worker::Worker(const Worker& other, const RcppParallel::Split)
     : y_{other.y_},
       x_{other.x_},
       foldIDs_{other.foldIDs_},
@@ -51,8 +49,7 @@ StochasticWorker::StochasticWorker(const StochasticWorker& other,
       resid_(maxTestSize_) {}
 
 // Work operator
-void StochasticWorker::operator()(const std::size_t begin,
-                                  const std::size_t end) {
+void Worker::operator()(const std::size_t begin, const std::size_t end) {
   // Casting from std::size_t to int is safe here (end is the number of folds
   // which is a 32-bit integer from R)
   for (int foldID{static_cast<int>(begin)}, endID{static_cast<int>(end)};
@@ -105,8 +102,6 @@ void StochasticWorker::operator()(const std::size_t begin,
 }
 
 // reduce results
-void StochasticWorker::join(const StochasticWorker& other) {
-  mses_ += other.mses_;
-}
+void Worker::join(const Worker& other) { mses_ += other.mses_; }
 
-};  // namespace Grid
+};  // namespace Grid::Stochastic

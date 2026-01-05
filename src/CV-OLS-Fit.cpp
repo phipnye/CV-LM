@@ -1,12 +1,11 @@
-#include "include/OLSFit.h"
+#include "CV-OLS-Fit.h"
 
 #include <RcppEigen.h>
 
 namespace CV::OLS {
 
 // Ctor
-OLSFit::OLSFit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-               const bool needHat)
+Fit::Fit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const bool needHat)
     : qr_{x}, nrow_{x.rows()}, rank_{qr_.rank()}, qty_{y} {
   qty_.applyOnTheLeft(qr_.householderQ().transpose());
 
@@ -29,20 +28,20 @@ OLSFit::OLSFit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 // --- Public interface
 
 // GCV = MSE / (1 - trace(H)/n)^2
-double OLSFit::gcv() const {
+double Fit::gcv() const {
   const double mrl{meanResidualLeverage()};
   return mse() / (mrl * mrl);
 }
 
 // LOOCV_error_i = e_i / (1 - h_ii))
-double OLSFit::loocv() const {
+double Fit::loocv() const {
   return (residuals().array() / (1.0 - diagH_)).square().mean();
 }
 
 // --- Internal math
 
 // Sum of squared residuals
-double OLSFit::rss() const {
+double Fit::rss() const {
   // Calculate RSS (using the full n x n orthogonal matrix Q, we transform y
   // into Q'y and partition the squared norm of y into two components:
   // ||y||^2 = ||(Q'y).head(rank)||^2 + ||(Q'y).tail(n - rank)||^2
@@ -51,14 +50,14 @@ double OLSFit::rss() const {
 }
 
 // Mean squared error
-double OLSFit::mse() const { return rss() / nrow_; }
+double Fit::mse() const { return rss() / nrow_; }
 
 // Mean residual leverage = (1 - trace(H)/n)
-double OLSFit::meanResidualLeverage() const {
+double Fit::meanResidualLeverage() const {
   return 1.0 - (static_cast<double>(rank_) / nrow_);  // trace(H) = rank(X)
 }
 
-Eigen::VectorXd OLSFit::residuals() const {
+Eigen::VectorXd Fit::residuals() const {
   // Zero out the components in the column space (the first 'rank' elements,
   // leaving only the components in the orthogonal complement)
   Eigen::VectorXd resid{qty_};

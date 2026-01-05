@@ -6,8 +6,8 @@
 #include <cstddef>
 #include <utility>
 
-#include "CVWorker.h"
-#include "utils.h"
+#include "CV-Worker.h"
+#include "CV-utils.h"
 
 namespace CV {
 
@@ -31,27 +31,26 @@ double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 }
 
 // Multi-threaded CV for linear and ridge regression
-template <typename WorkerFitType, typename... Args>
+template <typename WorkerModelType, typename... Args>
 double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
              const int seed, const int nThreads, Args&&... args) {
   // Setup folds
   const Eigen::Index nrow{x.rows()};
-  const auto [foldIDs,
-              foldSizes]{Utils::cvSetup(seed, static_cast<int>(nrow), k)};
+  const auto [foldIDs, foldSizes]{setupFolds(seed, static_cast<int>(nrow), k)};
 
   // Pre-calculate fold size bounds (this allows us to allocate data buffers of
   // appropriate size in our worker instances)
-  const auto [minTestSize, maxTestSize]{Utils::testSizeExtrema(foldSizes)};
+  const auto [minTestSize, maxTestSize]{testSizeExtrema(foldSizes)};
   const Eigen::Index maxTrainSize{nrow - minTestSize};
 
   // Initialize the templated worker with model-specific arguments (like lambda)
-  CVWorker<WorkerFitType> worker{y,
-                                 x,
-                                 foldIDs,
-                                 foldSizes,
-                                 maxTrainSize,
-                                 maxTestSize,
-                                 std::forward<Args>(args)...};
+  CVWorker<WorkerModelType> worker{y,
+                                   x,
+                                   foldIDs,
+                                   foldSizes,
+                                   maxTrainSize,
+                                   maxTestSize,
+                                   std::forward<Args>(args)...};
 
   // Compute CV result
   constexpr std::size_t begin{0};
