@@ -33,7 +33,7 @@ double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 // Multi-threaded CV for linear and ridge regression
 template <typename WorkerModelType, typename... Args>
 double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
-             const int seed, const int nThreads, Args&&... args) {
+             const int seed, const int nThreads, Args&&... modelArgs) {
   // Setup folds
   const Eigen::Index nrow{x.rows()};
   const auto [foldIDs, foldSizes]{setupFolds(seed, static_cast<int>(nrow), k)};
@@ -44,13 +44,13 @@ double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
   const Eigen::Index maxTrainSize{nrow - minTestSize};
 
   // Initialize the templated worker with model-specific arguments (like lambda)
-  CVWorker<WorkerModelType> worker{y,
+  Worker<WorkerModelType> worker{y,
                                    x,
                                    foldIDs,
                                    foldSizes,
                                    maxTrainSize,
                                    maxTestSize,
-                                   std::forward<Args>(args)...};
+                                   std::forward<Args>(modelArgs)...};
 
   // Compute CV result
   constexpr std::size_t begin{0};

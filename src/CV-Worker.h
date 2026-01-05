@@ -9,7 +9,7 @@
 namespace CV {
 
 template <typename Model>
-struct CVWorker : public RcppParallel::Worker {
+struct Worker : public RcppParallel::Worker {
   // Data members
   const Eigen::VectorXd& y_;
   const Eigen::MatrixXd& x_;
@@ -24,21 +24,21 @@ struct CVWorker : public RcppParallel::Worker {
   // Thread-local buffers
   Eigen::MatrixXd xTrain_;
   Eigen::VectorXd yTrain_;
-  Eigen::VectorXi trainIdxs_;
-  Eigen::VectorXi testIdxs_;
   Eigen::VectorXd beta_;
   Eigen::VectorXd resid_;
+  Eigen::VectorXi trainIdxs_;
+  Eigen::VectorXi testIdxs_;
 
   // Fit-specific data (e.g., lambda for Ridge)
   Model model_;
 
   // Main Ctor
   template <typename... Args>
-  explicit CVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+  explicit Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                     const Eigen::VectorXi& foldIDs,
                     const Eigen::VectorXi& foldSizes,
                     const Eigen::Index maxTrainSize,
-                    const Eigen::Index maxTestSize, Args&&... args)
+                    const Eigen::Index maxTestSize, Args&&... modelArgs)
       : y_{y},
         x_{x},
         foldIDs_{foldIDs},
@@ -54,10 +54,10 @@ struct CVWorker : public RcppParallel::Worker {
         testIdxs_(maxTestSize_),
         beta_(ncol_),
         resid_(maxTestSize_),
-        model_{std::forward<Args>(args)...} {}
+        model_{std::forward<Args>(modelArgs)...} {}
 
   // Split Ctor
-  explicit CVWorker(const CVWorker& other, const RcppParallel::Split)
+  explicit Worker(const Worker& other, const RcppParallel::Split)
       : y_{other.y_},
         x_{other.x_},
         foldIDs_{other.foldIDs_},
@@ -118,7 +118,7 @@ struct CVWorker : public RcppParallel::Worker {
 
   // parallelReduce uses join method to compose the operations of two worker
   // instances
-  void join(const CVWorker& other) { mse_ += other.mse_; }
+  void join(const Worker& other) { mse_ += other.mse_; }
 };
 
 }  // namespace CV

@@ -37,8 +37,7 @@ double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 
   // K-fold CV
   return useOLS ? CV::parCV<CV::OLS::WorkerModel>(y, x, k, seed, nThreads)
-                : CV::parCV<CV::Ridge::WorkerModel>(y, x, k, lambda, seed,
-                                                    nThreads, x.cols());
+                : CV::parCV<CV::Ridge::WorkerModel>(y, x, k, seed, nThreads, lambda, x.cols());;
 }
 
 // // [[Rcpp::export(name="grid.search.rcpp")]]
