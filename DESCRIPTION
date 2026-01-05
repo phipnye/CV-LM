@@ -8,5 +8,5 @@ Description: Efficient implementations of cross-validation techniques for linear
 License: MIT + file LICENSE
 Imports: stats, Rcpp (>= 1.0.13), RcppParallel (>= 5.1.8)
 LinkingTo: Rcpp, RcppParallel, RcppEigen
-SystemRequirements: GNU make
+SystemRequirements: GNU make, C++17
 URL: https://github.com/phipnye/CV-LM

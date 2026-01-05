@@ -1,2 +1,9 @@
+# Set the C++ standard
+CXX_STD = CXX17
+
+# Suppress Eigen's "ignoring attributes" warnings
+PKG_CPPFLAGS = -Wno-ignored-attributes
+
+# Link against RcppParallel
 PKG_CXXFLAGS += -DRCPP_PARALLEL_USE_TBB=1
 PKG_LIBS += $(shell "${R_HOME}/bin${R_ARCH_BIN}/Rscript.exe" -e "RcppParallel::RcppParallelLibs()")

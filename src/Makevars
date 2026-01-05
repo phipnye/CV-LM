@@ -1,2 +1,8 @@
-# We also need importFrom(RcppParallel,RcppParallelLibs) in NAMESPACE
+# Set the C++ standard
+CXX_STD = CXX17
+
+# Suppress Eigen's "ignoring attributes" warnings
+PKG_CPPFLAGS = -Wno-ignored-attributes
+
+# Link against RcppParallel
 PKG_LIBS += $(shell ${R_HOME}/bin/Rscript -e "RcppParallel::RcppParallelLibs()")
