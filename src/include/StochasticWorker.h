@@ -7,7 +7,7 @@
 
 namespace Grid {
 
-struct StochasticGridWorker : RcppParallel::Worker {
+struct StochasticWorker : RcppParallel::Worker {
   // Data members
   const Eigen::VectorXd& y_;
   const Eigen::MatrixXd& x_;
@@ -32,22 +32,23 @@ struct StochasticGridWorker : RcppParallel::Worker {
   Eigen::VectorXd resid_;
 
   // Ctor
-  explicit StochasticGridWorker(
-      const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-      const Eigen::VectorXi& foldIDs, const Eigen::VectorXi& foldSizes,
-      const Eigen::VectorXd& lambdas, const Eigen::Index nrow,
-      const Eigen::Index maxTrainSize, const Eigen::Index maxTestSize);
+  explicit StochasticWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+                            const Eigen::VectorXi& foldIDs,
+                            const Eigen::VectorXi& foldSizes,
+                            const Eigen::VectorXd& lambdas,
+                            const Eigen::Index nrow,
+                            const Eigen::Index maxTrainSize,
+                            const Eigen::Index maxTestSize);
 
   // Split ctor
-  StochasticGridWorker(const StochasticGridWorker& other,
-                       const RcppParallel::Split);
+  StochasticWorker(const StochasticWorker& other, const RcppParallel::Split);
 
   // RcppParallel requires an operator() to perform the work
   void operator()(const std::size_t begin, const std::size_t end) override;
 
   // parallelReduce uses join to compose the operations of two worker instances
   // that were previously split
-  void join(const StochasticGridWorker& other);
+  void join(const StochasticWorker& other);
 };
 
 };  // namespace Grid

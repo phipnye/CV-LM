@@ -2,11 +2,9 @@
 
 #include <RcppEigen.h>
 
-#include "BaseFit.h"
-
 namespace CV::OLS {
 
-class OLSFit : public BaseFit {
+class OLSFit {
   const Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr_;
   const Eigen::Index nrow_;
   const Eigen::Index rank_;
@@ -17,12 +15,14 @@ class OLSFit : public BaseFit {
   explicit OLSFit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                   const bool needHat);
 
+  double gcv() const;
+  double loocv() const;
+
  private:
   double rss() const;
-  double mse() const override;
-  double meanResidualLeverage() const override;
-  Eigen::Ref<const Eigen::VectorXd> residuals() const override;
-  const Eigen::ArrayXd& hatDiagonal() const override;
+  double mse() const;
+  double meanResidualLeverage() const;
+  Eigen::VectorXd residuals() const;
 };
 
 }  // namespace CV::OLS

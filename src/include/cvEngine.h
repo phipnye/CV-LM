@@ -37,11 +37,11 @@ double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
   // Setup folds
   const Eigen::Index nrow{x.rows()};
   const auto [foldIDs,
-              foldSizes]{CV::Utils::cvSetup(seed, static_cast<int>(nrow), k)};
+              foldSizes]{Utils::cvSetup(seed, static_cast<int>(nrow), k)};
 
   // Pre-calculate fold size bounds (this allows us to allocate data buffers of
   // appropriate size in our worker instances)
-  const auto [minTestSize, maxTestSize]{CV::Utils::testSizeExtrema(foldSizes)};
+  const auto [minTestSize, maxTestSize]{Utils::testSizeExtrema(foldSizes)};
   const Eigen::Index maxTrainSize{nrow - minTestSize};
 
   // Initialize the templated worker with model-specific arguments (like lambda)

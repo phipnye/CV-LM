@@ -2,11 +2,9 @@
 
 #include <RcppEigen.h>
 
-#include "BaseFit.h"
-
 namespace CV::Ridge {
 
-class RidgeFit : public BaseFit {
+class RidgeFit {
   const Eigen::Index nrow_;
   const Eigen::Index ncol_;
   const double lambda_;
@@ -19,13 +17,14 @@ class RidgeFit : public BaseFit {
   explicit RidgeFit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                     const double lambda, const bool centered,
                     const bool needHat);
+   
+  double gcv() const;
+  double loocv() const;
 
  private:
   double rss() const;
-  double mse() const override;
-  double meanResidualLeverage() const override;
-  Eigen::Ref<const Eigen::VectorXd> residuals() const override;
-  const Eigen::ArrayXd& hatDiagonal() const override;
+  double mse() const;
+  double meanResidualLeverage() const;
   double traceH() const;
 };
 

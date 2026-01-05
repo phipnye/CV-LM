@@ -1,11 +1,12 @@
-#include "include/StochasticGridWorker.h"
+#include "include/StochasticWorker.h"
 
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
 namespace Grid {
+
 // Ctor
-StochasticGridWorker::StochasticGridWorker(
+StochasticWorker::StochasticWorker(
     const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
     const Eigen::VectorXi& foldIDs, const Eigen::VectorXi& foldSizes,
     const Eigen::VectorXd& lambdas, const Eigen::Index nrow,
@@ -29,8 +30,8 @@ StochasticGridWorker::StochasticGridWorker(
       resid_(maxTestSize_) {}
 
 // Split ctor
-StochasticGridWorker::StochasticGridWorker(const StochasticGridWorker& other,
-                                           const RcppParallel::Split)
+StochasticWorker::StochasticWorker(const StochasticWorker& other,
+                                   const RcppParallel::Split)
     : y_{other.y_},
       x_{other.x_},
       foldIDs_{other.foldIDs_},
@@ -50,8 +51,8 @@ StochasticGridWorker::StochasticGridWorker(const StochasticGridWorker& other,
       resid_(maxTestSize_) {}
 
 // Work operator
-void StochasticGridWorker::operator()(const std::size_t begin,
-                                      const std::size_t end) {
+void StochasticWorker::operator()(const std::size_t begin,
+                                  const std::size_t end) {
   // Casting from std::size_t to int is safe here (end is the number of folds
   // which is a 32-bit integer from R)
   for (int foldID{static_cast<int>(begin)}, endID{static_cast<int>(end)};
@@ -104,7 +105,7 @@ void StochasticGridWorker::operator()(const std::size_t begin,
 }
 
 // reduce results
-void StochasticGridWorker::join(const StochasticGridWorker& other) {
+void StochasticWorker::join(const StochasticWorker& other) {
   mses_ += other.mses_;
 }
 

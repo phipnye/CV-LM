@@ -4,7 +4,7 @@
 #include "include/OLSFit.h"
 #include "include/RidgeFit.h"
 #include "include/WorkerFit.h"
-#include "include/engine.h"
+#include "include/cvEngine.h"
 #include "include/utils.h"
 
 // [[Rcpp::export(name="cv.lm.rcpp")]]
@@ -27,7 +27,7 @@ double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 
   // Preparation: Determine a valid number of folds as close to the passed
   // argument as possible
-  const int k{CV::Utils::kCheck(nrow, k0)};
+  const int k{Utils::kCheck(nrow, k0)};
 
   // LOOCV
   if (k == nrow) {

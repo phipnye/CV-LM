@@ -4,7 +4,7 @@
 
 #include <utility>
 
-namespace CV::Utils {
+namespace Utils {
 
 // RAII for setting rounding mode
 class ScopedRoundingMode {
@@ -30,4 +30,4 @@ std::pair<Eigen::VectorXi, Eigen::VectorXi> cvSetup(const int seed, const int n,
 std::pair<Eigen::Index, Eigen::Index> testSizeExtrema(
     const Eigen::VectorXi& foldSizes);
 
-}  // namespace CV::Utils
+}  // namespace Utils

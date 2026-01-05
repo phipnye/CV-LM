@@ -26,6 +26,21 @@ OLSFit::OLSFit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   }
 }
 
+// --- Public interface
+
+// GCV = MSE / (1 - trace(H)/n)^2
+double OLSFit::gcv() const {
+  const double mrl{meanResidualLeverage()};
+  return mse() / (mrl * mrl);
+}
+
+// LOOCV_error_i = e_i / (1 - h_ii))
+double OLSFit::loocv() const {
+  return (residuals().array() / (1.0 - diagH_)).square().mean();
+}
+
+// --- Internal math
+
 // Sum of squared residuals
 double OLSFit::rss() const {
   // Calculate RSS (using the full n x n orthogonal matrix Q, we transform y
@@ -43,7 +58,7 @@ double OLSFit::meanResidualLeverage() const {
   return 1.0 - (static_cast<double>(rank_) / nrow_);  // trace(H) = rank(X)
 }
 
-Eigen::Ref<const Eigen::VectorXd> OLSFit::residuals() const {
+Eigen::VectorXd OLSFit::residuals() const {
   // Zero out the components in the column space (the first 'rank' elements,
   // leaving only the components in the orthogonal complement)
   Eigen::VectorXd resid{qty_};
@@ -53,7 +68,5 @@ Eigen::Ref<const Eigen::VectorXd> OLSFit::residuals() const {
   resid.applyOnTheLeft(qr_.householderQ());
   return resid;
 }
-
-const Eigen::ArrayXd& OLSFit::hatDiagonal() const { return diagH_; }
 
 }  // namespace CV::OLS

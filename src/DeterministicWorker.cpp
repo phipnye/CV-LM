@@ -1,4 +1,4 @@
-#include "include/DeterministicGridWorker.h"
+#include "include/DeterministicWorker.h"
 
 #include <RcppEigen.h>
 #include <RcppParallel.h>
@@ -10,9 +10,11 @@ namespace Grid {
 
 // --- Base implementation
 
-DeterministicGridWorker::DeterministicGridWorker(
-    const Eigen::VectorXd& lambdas, const Eigen::ArrayXd& eigenValsSq,
-    const Eigen::VectorXd& uty, const Eigen::Index nrow, const bool centered)
+DeterministicWorker::DeterministicWorker(const Eigen::VectorXd& lambdas,
+                                         const Eigen::ArrayXd& eigenValsSq,
+                                         const Eigen::VectorXd& uty,
+                                         const Eigen::Index nrow,
+                                         const bool centered)
     : lambdas_{lambdas},
       eigenValsSq_{eigenValsSq},
       uty_{uty},
@@ -21,7 +23,7 @@ DeterministicGridWorker::DeterministicGridWorker(
       results_{std::numeric_limits<double>::infinity(), 0.0},
       denom_(eigenValsSq.size()) {}
 
-void DeterministicGridWorker::join(const DeterministicGridWorker& other) {
+void DeterministicWorker::join(const DeterministicWorker& other) {
   if (other.results_.first < results_.first) {
     results_ = other.results_;
   }
@@ -34,14 +36,14 @@ GCVGridWorker::GCVGridWorker(const Eigen::VectorXd& lambdas,
                              const Eigen::VectorXd& uty,
                              const Eigen::Index nrow, const bool centered,
                              const Eigen::ArrayXd& utySq, const double rssNull)
-    : DeterministicGridWorker{lambdas, eigenValsSq, uty, nrow, centered},
+    : DeterministicWorker{lambdas, eigenValsSq, uty, nrow, centered},
       utySq_{utySq},
       rssNull_{rssNull} {}
 
 GCVGridWorker::GCVGridWorker(const GCVGridWorker& other,
                              const RcppParallel::Split)
-    : DeterministicGridWorker{other.lambdas_, other.eigenValsSq_, other.uty_,
-                              other.nrow_, other.centered_},
+    : DeterministicWorker{other.lambdas_, other.eigenValsSq_, other.uty_,
+                          other.nrow_, other.centered_},
       utySq_{other.utySq_},
       rssNull_{other.rssNull_} {}
 
@@ -85,7 +87,7 @@ LOOCVGridWorker::LOOCVGridWorker(const Eigen::VectorXd& lambdas,
                                  const Eigen::VectorXd& yNull,
                                  const Eigen::MatrixXd& u,
                                  const Eigen::MatrixXd& uSq)
-    : DeterministicGridWorker{lambdas, eigenValsSq, uty, nrow, centered},
+    : DeterministicWorker{lambdas, eigenValsSq, uty, nrow, centered},
       yNull_{yNull},
       u_{u},
       uSq_{uSq},
@@ -95,8 +97,8 @@ LOOCVGridWorker::LOOCVGridWorker(const Eigen::VectorXd& lambdas,
 
 LOOCVGridWorker::LOOCVGridWorker(const LOOCVGridWorker& other,
                                  const RcppParallel::Split)
-    : DeterministicGridWorker{other.lambdas_, other.eigenValsSq_, other.uty_,
-                              other.nrow_, other.centered_},
+    : DeterministicWorker{other.lambdas_, other.eigenValsSq_, other.uty_,
+                          other.nrow_, other.centered_},
       yNull_{other.yNull_},
       u_{other.u_},
       uSq_{other.uSq_},

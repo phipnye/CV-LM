@@ -4,7 +4,7 @@
 #include <cfenv>
 #include <cmath>
 
-namespace CV::Utils {
+namespace Utils {
 
 // RAII guard for the rounding mode
 ScopedRoundingMode::ScopedRoundingMode(const int mode)
@@ -91,4 +91,4 @@ std::pair<Eigen::Index, Eigen::Index> testSizeExtrema(
   return {static_cast<Eigen::Index>(*minIt), static_cast<Eigen::Index>(*maxIt)};
 }
 
-}  // namespace CV::Utils
+}  // namespace Utils

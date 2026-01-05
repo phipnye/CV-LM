@@ -45,6 +45,21 @@ RidgeFit::RidgeFit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   }
 }
 
+// --- Public interface
+
+// GCV = MSE / (1 - trace(H)/n)^2
+double RidgeFit::gcv() const {
+  const double mrl{meanResidualLeverage()};
+  return mse() / (mrl * mrl);
+}
+
+// LOOCV_error_i = e_i / (1 - h_ii))
+double RidgeFit::loocv() const {
+  return (resid_.array() / (1.0 - diagH_)).square().mean();
+}
+
+// --- Internal math
+
 // Sum of squared residuals
 double RidgeFit::rss() const { return resid_.squaredNorm(); }
 
@@ -55,11 +70,6 @@ double RidgeFit::mse() const { return rss() / nrow_; }
 double RidgeFit::meanResidualLeverage() const {
   return 1.0 - (traceH() / nrow_);
 }
-
-// TO DO: Confirm this doesn't copy
-Eigen::Ref<const Eigen::VectorXd> RidgeFit::residuals() const { return resid_; }
-
-const Eigen::ArrayXd& RidgeFit::hatDiagonal() const { return diagH_; }
 
 double RidgeFit::traceH() const {
   // trace(H) = trace(X * (X'X + lambda*I)^-1 * X')
