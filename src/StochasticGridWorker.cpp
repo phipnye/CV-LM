@@ -1,5 +1,3 @@
-// [[Rcpp::depends(RcppEigen, RcppParallel)]]
-
 #include "include/StochasticGridWorker.h"
 
 #include <RcppEigen.h>
@@ -32,7 +30,7 @@ StochasticGridWorker::StochasticGridWorker(
 
 // Split ctor
 StochasticGridWorker::StochasticGridWorker(const StochasticGridWorker& other,
-                                           RcppParallel::Split)
+                                           const RcppParallel::Split)
     : y_{other.y_},
       x_{other.x_},
       foldIDs_{other.foldIDs_},

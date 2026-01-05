@@ -7,7 +7,8 @@
 
 namespace CV {
 
-struct BaseCVWorker : public RcppParallel::Worker {
+template <typename FitType>
+struct CVWorker : public RcppParallel::Worker {
   // Data members
   const Eigen::VectorXd& y_;
   const Eigen::MatrixXd& x_;
@@ -27,73 +28,96 @@ struct BaseCVWorker : public RcppParallel::Worker {
   Eigen::VectorXd beta_;
   Eigen::VectorXd resid_;
 
-  // Ctor
-  explicit BaseCVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                        const Eigen::VectorXi& foldIDs,
-                        const Eigen::VectorXi& foldSizes,
-                        const Eigen::Index maxTrainSize,
-                        const Eigen::Index maxTestSize);
+  // Fit-specific data (e.g., lambda for Ridge)
+  FitType model_;
 
-  // Virtaul dtor
-  virtual ~BaseCVWorker() override = default;
-
-  // RcppParallel's parallel reduce requires:
-  // 1) An operator() which performs the work
-  // 2) A join method which composes the operations of two worker instances that
-  // were previously split Here we simply combine the accumulated value of the
-  // instance we are being joined with to our own
-  void operator()(const std::size_t begin, const std::size_t end) override;
-  void join(const BaseCVWorker& other);
-
-  // Derived classes implement the specific math engine (use Eigen::Ref to
-  // accept expressions without forcing evaluation to MatrixXd)
-  virtual void computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
-                           const Eigen::Ref<const Eigen::VectorXd>& yTrain) = 0;
-};
-
-namespace OLS {
-
-struct CVWorker : public BaseCVWorker {
-  // Ctor
+  // Main Ctor
+  template <typename... Args>
   explicit CVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                     const Eigen::VectorXi& foldIDs,
                     const Eigen::VectorXi& foldSizes,
                     const Eigen::Index maxTrainSize,
-                    const Eigen::Index maxTestSize);
+                    const Eigen::Index maxTestSize, Args&&... args)
+      : y_{y},
+        x_{x},
+        foldIDs_{foldIDs},
+        foldSizes_{foldSizes},
+        nrow_{x.rows()},
+        ncol_{x.cols()},
+        maxTrainSize_{maxTrainSize},
+        maxTestSize_{maxTestSize},
+        mse_{0.0},
+        xTrain_(maxTrainSize_, ncol_),
+        yTrain_(maxTrainSize_),
+        trainIdxs_(maxTrainSize_),
+        testIdxs_(maxTestSize_),
+        beta_(ncol_),
+        resid_(maxTestSize_),
+        model_{std::forward<Args>(args)...} {}
 
-  // Split ctor
-  explicit CVWorker(const CVWorker& other, const RcppParallel::Split split);
+  // Split Ctor
+  explicit CVWorker(const CVWorker& other, const RcppParallel::Split)
+      : y_{other.y_},
+        x_{other.x_},
+        foldIDs_{other.foldIDs_},
+        foldSizes_{other.foldSizes_},
+        nrow_{other.nrow_},
+        ncol_{other.ncol_},
+        maxTrainSize_{other.maxTrainSize_},
+        maxTestSize_{other.maxTestSize_},
+        mse_{0.0},
+        xTrain_(maxTrainSize_, ncol_),
+        yTrain_(maxTrainSize_),
+        trainIdxs_(maxTrainSize_),
+        testIdxs_(maxTestSize_),
+        beta_(ncol_),
+        resid_(maxTestSize_),
+        model_{other.model_} {}
 
-  // Compute OLS coefficients
-  void computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
-                   const Eigen::Ref<const Eigen::VectorXd>& yTrain) override;
+  // parallelReduce requires an operator() to perform the work
+  void operator()(const std::size_t begin, const std::size_t end) {
+    // Casting from std::size_t to int is safe here (end is the number of folds
+    // which is a signed 32-bit integer from R)
+    for (int foldID{static_cast<int>(begin)}, endID{static_cast<int>(end)};
+         foldID < endID; ++foldID) {
+      const Eigen::Index testSize{foldSizes_[foldID]};
+      const Eigen::Index trainSize{nrow_ - testSize};
+
+      // Prepare training and testing containers
+      Eigen::Index tr{0};
+      Eigen::Index ts{0};
+
+      for (int row{0}; row < nrow_; ++row) {
+        if (foldIDs_[row] == foldID) {
+          testIdxs_[ts++] = row;
+        } else {
+          trainIdxs_[tr++] = row;
+        }
+      }
+
+      // Copy training data using pre-allocated buffers
+      xTrain_.topRows(trainSize) = x_(trainIdxs_.head(trainSize), Eigen::all);
+      yTrain_.head(trainSize) = y_(trainIdxs_.head(trainSize));
+
+      // Fit the model
+      model_.computeBeta(xTrain_.topRows(trainSize), yTrain_.head(trainSize),
+                         beta_);
+
+      // Evaluate performance on hold-out fold (MSE)
+      resid_.head(testSize) = y_(testIdxs_.head(testSize));
+      resid_.head(testSize).noalias() -=
+          (x_(testIdxs_.head(testSize), Eigen::all) * beta_);
+      const double foldMSE{resid_.head(testSize).squaredNorm() / testSize};
+
+      // Weighted MSE contribution
+      const double alpha{static_cast<double>(testSize) / nrow_};
+      mse_ += (alpha * foldMSE);
+    }
+  }
+
+  // parallelReduce uses join method to compose the operations of two worker
+  // instances
+  void join(const CVWorker& other) { mse_ += other.mse_; }
 };
-
-}  // namespace OLS
-
-namespace Ridge {
-
-struct CVWorker : public BaseCVWorker {
-  // (Additional) data members
-  const double lambda_;
-
-  // Pre-allocated buffers for X'X + lambda * I
-  Eigen::MatrixXd xtxLambda_;
-
-  // Ctor
-  explicit CVWorker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                    double lambda, const Eigen::VectorXi& foldIDs,
-                    const Eigen::VectorXi& foldSizes,
-                    const Eigen::Index maxTrainSize,
-                    const Eigen::Index maxTestSize);
-
-  // Split ctor
-  explicit CVWorker(const CVWorker& other, const RcppParallel::Split split);
-
-  // Compute ridge coefficients
-  void computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
-                   const Eigen::Ref<const Eigen::VectorXd>& yTrain) override;
-};
-}  // namespace Ridge
 
 }  // namespace CV

@@ -1,5 +1,3 @@
-// [[Rcpp::depends(RcppEigen, RcppParallel)]]
-
 #include "include/DeterministicGridWorker.h"
 
 #include <RcppEigen.h>
