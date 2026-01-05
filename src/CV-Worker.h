@@ -4,6 +4,7 @@
 #include <RcppParallel.h>
 
 #include <cstddef>
+#include <utility>
 
 namespace CV {
 
