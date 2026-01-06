@@ -2,41 +2,72 @@
 ##
 ## This file is part of the cvLM package.
 
-grid.search <- function(formula, data, subset, na.action, K = 10L, generalized = FALSE, seed = 1L,
-                        n.threads = 1L, max.lambda = 10000, precision = 0.1, verbose = TRUE) {
-  if (length(K) != 1L || is.na(K) || !is.integer(K) || K < 2L || K > nrow(data)) {
-    stop("Argument 'K' must be a single non-missing integer value between ", 2L, " and ", nrow(data), ".")
-  }
-  if (!(isTRUE(generalized) || isFALSE(generalized))) {
-    stop("Argument 'generalized' should be TRUE or FALSE.")
-  }
-  if (isTRUE(generalized) && K != nrow(data)) {
-    stop("Argument 'K' should be equivalent to the number of observations when computing generalized CV.")
-  }
-  if (length(seed) != 1L || is.na(seed) || !is.integer(seed)) {
-    stop("Argument 'seed' must be a single integer value.")
-  }
-  if (length(n.threads) != 1L || is.na(n.threads) || !is.integer(n.threads) || n.threads < 1L) {
-    stop("Argument 'n.threads' must be a single positive integer value.")
-  }
-  if (!(isTRUE(verbose) || isFALSE(verbose))) {
-    stop("Argument 'verbose' should be TRUE or FALSE.")
-  }
+grid.search <- function(
+  formula,
+  data,
+  subset,
+  na.action,
+  K = 10L,
+  generalized = FALSE,
+  seed = 1L,
+  n.threads = 1L,
+  max.lambda = 10000,
+  precision = 0.1,
+  penalize.intercept = FALSE
+) {
+  # Extract data
+  dat <- .prepare_lm_data(formula, data, subset, na.action)
+  y <- dat$y
+  X <- dat$X
+  mt <- dat$mt
 
-  n.threads <- min(K, n.threads)
-  mf <- match.call(expand.dots = FALSE)
-  m <- match(c("formula", "data", "subset", "na.action"), names(mf), 0L)
-  mf <- mf[c(1L, m)]
-  mf[["drop.unused.levels"]] <- TRUE
-  mf[[1L]] <- quote(stats::model.frame)
-  mf <- eval(mf, parent.frame())
+  # --- Confirm validity of arguments
 
-  if (is.empty.model(mt <- attr(mf, "terms"))) {
-    stop("Empty model specified.")
-  }
+  # Number of folds
+  K <- .assert_integer_scalar(K, "K", nonneg = TRUE)
 
-  X <- model.matrix(mt, mf)
-  y <- model.response(mf, "double")
+  # Generalized boolean
+  .assert_logical_scalar(generalized, "generalized")
+
+  # Seed
+  seed <- .assert_integer_scalar(seed, "seed", nonneg = TRUE)
+
+  # Number of threads (-1 -> defaultNumThreads)
+  n.threads <- .assert_valid_threads(n.threads)
+
+  # Maximum lambda to check
+  max.lambda <- .assert_double_scalar(max.lambda, "max.lambda", nonneg = TRUE)
+
+  # Precision / step size
+  precision <- .assert_double_scalar(precision, "precision", nonneg = TRUE)
   
-  return(list(CV = opt.cv, lambda = opt.lambda))
+  # Make sure the grid isn't an unreasonable size
+  .assert_sensible_grid(max.lambda, precision)
+
+  # Whether to penalize the intercept coefficient in the case of ridge regression
+  .assert_logical_scalar(penalize.intercept, "penalize.intercept")
+
+  # We only center if it's a ridge regression model with an intercept
+  centered <- !penalize.intercept && attr(mt, "intercept") == 1L
+
+  # Center the data and drop the intercept column
+  if (centered) {
+    tmp <- .center_data(y, X, mt)
+    y <- tmp$y
+    X <- tmp$X
+  }
+
+  # Check for valid regression data before passing to C++
+  .assert_valid_data(y, X)
+  grid.search.rcpp(
+    y = y,
+    x = X,
+    k0 = K,
+    maxLambda = max.lambda,
+    precision = precision,
+    generalized = generalized,
+    seed = seed,
+    nThreads = n.threads,
+    centered = centered
+  )
 }

@@ -2,137 +2,159 @@
 ##
 ## This file is part of the cvLM package.
 
-is.linear.reg.model <- function(model) inherits(model, "lm") && all.equal(family(model), gaussian())
-
-prepare.data <- function(y, X, mt, lambda) {
-  # Identify the intercept column
-  intercept.col <- which(colnames(X) == "(Intercept)")
-
-  if (length(intercept.col) > 0L) {
-    # Center y
-    y <- y - mean(y)
-    # Drop intercept and center X columns
-    # When you center y and X, the regression line is forced to pass through
-    # the origin of the new coordinate system, where the intercept is
-    # mathematically guaranteed to be zero, hence a column of ones is not needed anymore
-    X <- scale(X[, -intercept.col, drop = FALSE], scale = FALSE)
-  }
-  return(list(y = y, X = X))
-}
-
-validate.args <- function(K.vals, lambda, generalized, data, seed, n.threads) {
-  if (any(is.na(K.vals)) || !is.integer(K.vals) || length(K.vals) < 1L) {
-    stop("Argument 'K.vals' must be a non-empty integer vector.", call. = FALSE)
-  }
-
-  if (any(K.vals < 2L) || any(K.vals > nrow(data))) {
-    stop("Invalid number of folds specified that lies outside the valid range: ", 2L, "-", nrow(data), ".", call. = FALSE)
-  }
-
-  if (length(lambda) != 1L || is.na(lambda) || !is.numeric(lambda) || lambda < 0) {
-    stop("Argument 'lambda' must be a non-negative numeric scalar.", call. = FALSE)
-  }
-
-  if (!(isTRUE(generalized) || isFALSE(generalized))) {
-    stop("Argument 'generalized' should be TRUE or FALSE.", call. = FALSE)
-  }
-
-  if (isTRUE(generalized) && any(K.vals != nrow(data))) {
-    stop("Argument 'K.vals' should be equivalent to the number of observations when computing generalized CV.", call. = FALSE)
-  }
-
-  if (length(seed) != 1L || is.na(seed) || !is.integer(seed)) {
-    stop("Argument 'seed' must be a single integer value.", call. = FALSE)
-  }
-
-  if (length(n.threads) != 1L || is.na(n.threads) || !is.integer(n.threads) || n.threads < 1L) {
-    stop("Argument 'n.threads' must be a single positive integer value.", call. = FALSE)
-  }
-
-  return(invisible())
-}
-
-eval.cvLM <- function(y, X, K.vals, lambda, generalized, seed, n.threads, centered = FALSE) {
+.eval_cvLM <- function(
+  y,
+  X,
+  K.vals,
+  lambda,
+  generalized,
+  seed,
+  n.threads,
+  centered
+) {
   cvs <- vapply(
     K.vals,
     function(K) {
-      n.threads <- min(K, n.threads)
-      return(cv.lm.rcpp(y, X, K, lambda, generalized, seed, n.threads, centered))
+      cv.lm.rcpp(
+        y,
+        X,
+        K,
+        lambda,
+        generalized,
+        seed,
+        min(K, n.threads),
+        centered
+      )
     },
     numeric(1L),
     USE.NAMES = FALSE
   )
 
-  return(data.frame(
-    K = K.vals,
-    CV = cvs,
-    seed = seed
-  ))
+  data.frame(K = K.vals, CV = cvs, seed = seed)
 }
 
 cvLM <- function(object, ...) UseMethod("cvLM")
 
-cvLM.formula <- function(object, data, subset, na.action, K.vals = 10L, lambda = 0, generalized = FALSE,
-                         seed = 1L, n.threads = 1L, ...) {
-  validate.args(K.vals, lambda, generalized, data, seed, n.threads)
+cvLM.formula <- function(
+  object,
+  data,
+  subset,
+  na.action,
+  K.vals = 10L,
+  lambda = 0,
+  generalized = FALSE,
+  seed = 1L,
+  n.threads = 1L,
+  penalize.intercept = FALSE,
+  ...
+) {
+  # Extract data
+  dat <- .prepare_lm_data(object, data, subset, na.action)
+  y <- dat$y
+  X <- dat$X
+  mt <- dat$mt
 
-  if (is.integer(lambda)) {
-    lambda <- as.double(lambda)
+  # --- Confirm validity of arguments
+
+  # Number of folds
+  K.vals <- .assert_valid_kvals(K.vals, nrow(X))
+
+  # Shrinkage parameter
+  lambda <- .assert_double_scalar(lambda, "lambda", nonneg = TRUE)
+
+  # Generalized boolean
+  .assert_logical_scalar(generalized, "generalized")
+
+  # Seed
+  seed <- .assert_integer_scalar(seed, "seed", nonneg = TRUE)
+
+  # Number of threads (-1 -> defaultNumThreads)
+  n.threads <- .assert_valid_threads(n.threads)
+
+  # Whether to penalize the intercept coefficient in the case of ridge regression
+  if (lambda > 0) {
+    .assert_logical_scalar(penalize.intercept, "penalize.intercept")
   }
 
-  mf <- match.call(expand.dots = FALSE)
-  m <- match(c("object", "data", "subset", "na.action"), names(mf), 0L)
-  mf <- mf[c(1L, m)]
-  names(mf)[names(mf) == "object"] <- "formula"
-  mf[["drop.unused.levels"]] <- TRUE
-  mf[[1L]] <- quote(stats::model.frame)
-  mf <- eval(mf, parent.frame())
+  # We only center if it's a ridge regression model with an intercept
+  centered <- !penalize.intercept && lambda > 0 && attr(mt, "intercept") == 1L
 
-  if (is.empty.model(mt <- attr(mf, "terms"))) {
-    stop("Empty model specified.", call. = FALSE)
+  # Center the data and drop the intercept column
+  if (centered) {
+    tmp <- .center_data(y, X, mt)
+    y <- tmp$y
+    X <- tmp$X
   }
 
-  X <- model.matrix(mt, mf)
-  y <- model.response(mf, "double")
-
-  # We only center if it's a Ridge model (lambda > 0)
-  if (lambda > 0 && attr(mt, "intercept") == 1L) {
-    prep <- prepare.data(y, X, mt, lambda) # center the data and drop the intercept column
-    return(eval.cvLM(prep[["y"]], prep[["X"]], K.vals, lambda, generalized, seed, n.threads, centered = TRUE))
-  }
-
-  return(eval.cvLM(y, X, K.vals, lambda, generalized, seed, n.threads))
+  # Check for valid regression data before passing to C++
+  .assert_valid_data(y, X)
+  .eval_cvLM(y, X, K.vals, lambda, generalized, seed, n.threads, centered)
 }
 
-cvLM.lm <- function(object, data, K.vals = 10L, lambda = 0, generalized = FALSE, seed = 1L, n.threads = 1L,
-                    ...) {
-  validate.args(K.vals, lambda, generalized, data, seed, n.threads)
-
-  if (is.integer(lambda)) {
-    lambda <- as.double(lambda)
+cvLM.lm <- function(
+  object,
+  data,
+  K.vals = 10L,
+  lambda = 0,
+  generalized = FALSE,
+  seed = 1L,
+  n.threads = 1L,
+  penalize.intercept = FALSE,
+  ...
+) {
+  # Raise warning for unsupported lm features (weights and offset)
+  if (!is.null(object$weights)) {
+    warning(
+      "cvLM does not currently support weighted least squares. Weights will be ignored.",
+      call. = FALSE
+    )
   }
 
-  formula <- formula(object)
-  mf <- model.frame(formula, data)
-  mt <- attr(mf, "terms")
-  X <- model.matrix(mt, mf)
-  y <- model.response(mf, "double")
-
-  # We only center if it's a Ridge model (lambda > 0)
-  if (lambda > 0 && attr(mt, "intercept") == 1L) {
-    prep <- prepare.data(y, X, mt, lambda) # center the data and drop the intercept column
-    return(eval.cvLM(prep[["y"]], prep[["X"]], K.vals, lambda, generalized, seed, n.threads, centered = TRUE))
+  if (!is.null(object$offset)) {
+    warning(
+      "cvLM does not currently support offsets. Offset will be ignored.",
+      call. = FALSE
+    )
   }
 
-  return(eval.cvLM(y, X, K.vals, lambda, generalized, seed, n.threads))
+  cvLM.formula(
+    formula(object),
+    data = data,
+    K.vals = K.vals,
+    lambda = lambda,
+    generalized = generalized,
+    seed = seed,
+    n.threads = n.threads,
+    penalize.intercept = penalize.intercept
+  )
 }
 
-cvLM.glm <- function(object, data, K.vals = 10L, lambda = 0, generalized = FALSE, seed = 1L, n.threads = 1L,
-                     ...) {
-  if (!is.linear.reg.model(object)) {
-    stop("cvLM only performs cross-validation for linear and ridge regression models.", call. = FALSE)
+cvLM.glm <- function(
+  object,
+  data,
+  K.vals = 10L,
+  lambda = 0,
+  generalized = FALSE,
+  seed = 1L,
+  n.threads = 1L,
+  penalize.intercept = FALSE,
+  ...
+) {
+  if (!.is_lm(object)) {
+    stop(
+      "cvLM only performs cross-validation for linear and ridge regression models.",
+      call. = FALSE
+    )
   }
 
-  class(object) <- c("lm", setdiff(class(object), "lm"))
-  NextMethod("cvLM")
+  cvLM.lm(
+    object,
+    data = data,
+    K.vals = K.vals,
+    lambda = lambda,
+    generalized = generalized,
+    seed = seed,
+    n.threads = n.threads,
+    penalize.intercept = penalize.intercept
+  )
 }

@@ -51,7 +51,6 @@ namespace Ridge {
 WorkerModel::WorkerModel(const double lambda, const Eigen::Index ncol)
     : lambda_{lambda}, xtxLambda_(ncol, ncol) {}
 
-// Explicitly handle copying/splitting to ensure buffer allocation
 WorkerModel::WorkerModel(const WorkerModel& other)
     : lambda_{other.lambda_},
       xtxLambda_(other.xtxLambda_.rows(), other.xtxLambda_.cols()) {}

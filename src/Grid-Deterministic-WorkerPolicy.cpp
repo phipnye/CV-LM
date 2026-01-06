@@ -5,11 +5,11 @@ namespace Grid::Deterministic {
 namespace GCV {
 
 WorkerPolicy::WorkerPolicy(const Eigen::ArrayXd& utySq, const double rssNull)
-    : rssNull_{rssNull}, utySq_{utySq} {}
+    : utySq_{utySq}, rssNull_{rssNull} {}
 
 double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
                               const Eigen::ArrayXd& eigenValsSq,
-                              const Eigen::VectorXd&, const Eigen::Index nrow,
+                              const Eigen::Index nrow,
                               const bool centered) const {
   // trace(H) = sum(eigenVals^2 / (eigenVals^2 + lambda))
   double traceH{(eigenValsSq / denom).sum()};
@@ -35,11 +35,12 @@ namespace LOOCV {
 
 WorkerPolicy::WorkerPolicy(const Eigen::VectorXd& yNull,
                            const Eigen::MatrixXd& u, const Eigen::MatrixXd& uSq,
-                           const Eigen::Index nrow,
+                           const Eigen::VectorXd& uty, const Eigen::Index nrow,
                            const Eigen::Index eigenValSize)
     : yNull_{yNull},
       u_{u},
       uSq_{uSq},
+      uty_{uty},
       diagS_(eigenValSize),
       diagH_(nrow),
       resid_(nrow) {}
@@ -48,13 +49,13 @@ WorkerPolicy::WorkerPolicy(const WorkerPolicy& other)
     : yNull_{other.yNull_},
       u_{other.u_},
       uSq_{other.uSq_},
+      uty_{other.uty_},
       diagS_(other.diagS_.size()),
       diagH_(other.diagH_.size()),
       resid_(other.resid_.size()) {}
 
 double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
                               const Eigen::ArrayXd& eigenValsSq,
-                              const Eigen::VectorXd& uty,
                               const Eigen::Index nrow,
                               const bool centered) const {
   // Calculate the diagonal of the Ridge shrinkage matrix = eigenVal_i^2 /
@@ -73,7 +74,7 @@ double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
   // Calculate Ridge residuals: e = y - y_hat = yNull + U * [(lambda /
   // (eigenVals^2 + lambda)) * U'y]
   resid_ = yNull_;
-  resid_.noalias() += u_ * ((lambda / denom) * uty.array()).matrix();
+  resid_.noalias() += u_ * ((lambda / denom) * uty_.array()).matrix();
 
   // LOOCV = mean((e_i / (1 - h_ii))^2)
   return (resid_.array() / (1.0 - diagH_)).square().mean();

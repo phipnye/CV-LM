@@ -8,34 +8,34 @@
 namespace Grid::Stochastic {
 
 struct Worker : RcppParallel::Worker {
-  // Data members
+  // References
   const Eigen::VectorXd& y_;
   const Eigen::MatrixXd& x_;
   const Eigen::VectorXi& foldIDs_;
   const Eigen::VectorXi& foldSizes_;
   const Eigen::VectorXd& lambdas_;
-  const Eigen::Index nrow_;
-  const Eigen::Index maxTrainSize_;
-  const Eigen::Index maxTestSize_;
 
-  // Accumulator (vector of MSEs (one per lambda))
+  // Sizes
+  const Eigen::Index nrow_;
+
+  // Accumulator (vector of MSEs - one per lambda)
   Eigen::VectorXd mses_;
 
   // Thread-specific data buffers
-  Eigen::VectorXi trainIdxs_;
-  Eigen::VectorXi testIdxs_;
   Eigen::VectorXd uty_;
+  Eigen::VectorXd beta_;
+  Eigen::VectorXd resid_;
   Eigen::ArrayXd eigenVals_;
   Eigen::ArrayXd eigenValsSq_;
   Eigen::ArrayXd diagD_;
-  Eigen::VectorXd beta_;
-  Eigen::VectorXd resid_;
+  Eigen::VectorXi trainIdxs_;
+  Eigen::VectorXi testIdxs_;
 
   // Ctor
   explicit Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                   const Eigen::VectorXi& foldIDs,
                   const Eigen::VectorXi& foldSizes,
-                  const Eigen::VectorXd& lambdas, const Eigen::Index nrow,
+                  const Eigen::VectorXd& lambdas,
                   const Eigen::Index maxTrainSize,
                   const Eigen::Index maxTestSize);
 

@@ -5,3 +5,7 @@ cv.lm.rcpp <- function(y, x, k0, lambda, generalized, seed, nThreads, centered) 
     .Call(`_cvLM_cvLMRCpp`, y, x, k0, lambda, generalized, seed, nThreads, centered)
 }
 
+grid.search.rcpp <- function(y, x, k0, maxLambda, precision, generalized, seed, nThreads, centered) {
+    .Call(`_cvLM_gridSearch`, y, x, k0, maxLambda, precision, generalized, seed, nThreads, centered)
+}
+

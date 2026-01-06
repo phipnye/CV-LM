@@ -10,15 +10,17 @@ namespace CV {
 
 template <typename Model>
 struct Worker : public RcppParallel::Worker {
-  // Data members
+  // References
   const Eigen::VectorXd& y_;
   const Eigen::MatrixXd& x_;
   const Eigen::VectorXi& foldIDs_;
   const Eigen::VectorXi& foldSizes_;
+
+  // Sizes
   const Eigen::Index nrow_;
   const Eigen::Index ncol_;
-  const Eigen::Index maxTrainSize_;
-  const Eigen::Index maxTestSize_;
+
+  // Accumulator
   double mse_;
 
   // Thread-local buffers
@@ -35,25 +37,23 @@ struct Worker : public RcppParallel::Worker {
   // Main Ctor
   template <typename... Args>
   explicit Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                    const Eigen::VectorXi& foldIDs,
-                    const Eigen::VectorXi& foldSizes,
-                    const Eigen::Index maxTrainSize,
-                    const Eigen::Index maxTestSize, Args&&... modelArgs)
+                  const Eigen::VectorXi& foldIDs,
+                  const Eigen::VectorXi& foldSizes,
+                  const Eigen::Index maxTrainSize,
+                  const Eigen::Index maxTestSize, Args&&... modelArgs)
       : y_{y},
         x_{x},
         foldIDs_{foldIDs},
         foldSizes_{foldSizes},
         nrow_{x.rows()},
         ncol_{x.cols()},
-        maxTrainSize_{maxTrainSize},
-        maxTestSize_{maxTestSize},
         mse_{0.0},
-        xTrain_(maxTrainSize_, ncol_),
-        yTrain_(maxTrainSize_),
-        trainIdxs_(maxTrainSize_),
-        testIdxs_(maxTestSize_),
+        xTrain_(maxTrainSize, ncol_),
+        yTrain_(maxTrainSize),
+        trainIdxs_(maxTrainSize),
+        testIdxs_(maxTestSize),
         beta_(ncol_),
-        resid_(maxTestSize_),
+        resid_(maxTestSize),
         model_{std::forward<Args>(modelArgs)...} {}
 
   // Split Ctor
@@ -64,15 +64,13 @@ struct Worker : public RcppParallel::Worker {
         foldSizes_{other.foldSizes_},
         nrow_{other.nrow_},
         ncol_{other.ncol_},
-        maxTrainSize_{other.maxTrainSize_},
-        maxTestSize_{other.maxTestSize_},
         mse_{0.0},
-        xTrain_(maxTrainSize_, ncol_),
-        yTrain_(maxTrainSize_),
-        trainIdxs_(maxTrainSize_),
-        testIdxs_(maxTestSize_),
-        beta_(ncol_),
-        resid_(maxTestSize_),
+        xTrain_(other.xTrain_.rows(), other.xTrain_.cols()),
+        yTrain_(other.yTrain_.size()),
+        trainIdxs_(other.trainIdxs_.size()),
+        testIdxs_(other.testIdxs_.size()),
+        beta_(other.beta_.size()),
+        resid_(other.resid_.size()),
         model_{other.model_} {}
 
   // parallelReduce requires an operator() to perform the work
