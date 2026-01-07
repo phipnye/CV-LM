@@ -5,6 +5,8 @@
 
 #include <cstddef>
 
+#include "Grid-Generator.h"
+
 namespace Grid::Stochastic {
 
 struct Worker : RcppParallel::Worker {
@@ -13,7 +15,7 @@ struct Worker : RcppParallel::Worker {
   const Eigen::MatrixXd& x_;
   const Eigen::VectorXi& foldIDs_;
   const Eigen::VectorXi& foldSizes_;
-  const Eigen::VectorXd& lambdas_;
+  const Generator& lambdasGrid_;
 
   // Sizes
   const Eigen::Index nrow_;
@@ -35,8 +37,7 @@ struct Worker : RcppParallel::Worker {
   explicit Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                   const Eigen::VectorXi& foldIDs,
                   const Eigen::VectorXi& foldSizes,
-                  const Eigen::VectorXd& lambdas,
-                  const Eigen::Index maxTrainSize,
+                  const Generator& lambdasGrid, const Eigen::Index maxTrainSize,
                   const Eigen::Index maxTestSize);
 
   // Split ctor

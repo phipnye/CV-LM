@@ -3,28 +3,30 @@
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
+#include "Grid-Generator.h"
+
 namespace Grid::Stochastic {
 
 // Ctor
 Worker::Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                const Eigen::VectorXi& foldIDs, const Eigen::VectorXi& foldSizes,
-               const Eigen::VectorXd& lambdas, const Eigen::Index maxTrainSize,
+               const Generator& lambdasGrid, const Eigen::Index maxTrainSize,
                const Eigen::Index maxTestSize)
     : y_{y},
       x_{x},
       foldIDs_{foldIDs},
       foldSizes_{foldSizes},
-      lambdas_{lambdas},
+      lambdasGrid_{lambdasGrid},
       nrow_{x_.rows()},
-      mses_(Eigen::VectorXd::Zero(lambdas.size())),
-      trainIdxs_(maxTrainSize),
-      testIdxs_(maxTestSize),
+      mses_(Eigen::VectorXd::Zero(lambdasGrid.size())),
       uty_(x.cols()),
+      beta_(x.cols()),
+      resid_(maxTestSize),
       eigenVals_(x.cols()),
       eigenValsSq_(x.cols()),
       diagD_(x.cols()),
-      beta_(x.cols()),
-      resid_(maxTestSize) {}
+      trainIdxs_(maxTrainSize),
+      testIdxs_(maxTestSize) {}
 
 // Split ctor
 Worker::Worker(const Worker& other, const RcppParallel::Split)
@@ -32,17 +34,17 @@ Worker::Worker(const Worker& other, const RcppParallel::Split)
       x_{other.x_},
       foldIDs_{other.foldIDs_},
       foldSizes_{other.foldSizes_},
-      lambdas_{other.lambdas_},
+      lambdasGrid_{other.lambdasGrid_},
       nrow_{other.nrow_},
-      mses_(Eigen::VectorXd::Zero(other.lambdas_.size())),
-      trainIdxs_(other.trainIdxs_.size()),
-      testIdxs_(other.testIdxs_.size()),
+      mses_(Eigen::VectorXd::Zero(other.mses_.size())),
       uty_(other.uty_.size()),
+      beta_(other.beta_.size()),
+      resid_(other.resid_.size()),
       eigenVals_(other.eigenVals_.size()),
       eigenValsSq_(other.eigenValsSq_.size()),
       diagD_(other.diagD_.size()),
-      beta_(other.beta_.size()),
-      resid_(other.resid_.size()) {}
+      trainIdxs_(other.trainIdxs_.size()),
+      testIdxs_(other.testIdxs_.size()) {}
 
 // Work operator
 void Worker::operator()(const std::size_t begin, const std::size_t end) {
@@ -75,11 +77,11 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
     eigenVals_ = svd.singularValues();
     eigenValsSq_ = eigenVals_.square();
 
-    for (Eigen::Index lambdaIdx{0}, nLambda{lambdas_.size()};
+    for (Eigen::Index lambdaIdx{0}, nLambda{lambdasGrid_.size()};
          lambdaIdx < nLambda; ++lambdaIdx) {
       // TO DO: Handle rank-deficient and 0 shrinkage case
       // diag(D)_i = diag(eigenVal_i / eigenVal_i^2 + lambda)
-      diagD_ = eigenVals_ / (eigenValsSq_ + lambdas_[lambdaIdx]);
+      diagD_ = eigenVals_ / (eigenValsSq_ + lambdasGrid_[lambdaIdx]);
 
       // beta = V * diagD * U'y
       beta_.noalias() = v * (diagD_ * uty_.array()).matrix();

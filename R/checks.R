@@ -146,7 +146,7 @@ is.wholenumber <- function(x, tol = .Machine$double.eps^0.5) {
   n.threads <- .assert_integer_scalar(n.threads, "n.threads", nonneg = FALSE)
   def.threads <- RcppParallel::defaultNumThreads()
 
-  if (identical(x, -1L)) {
+  if (identical(n.threads, -1L)) {
     return(def.threads)
   }
 

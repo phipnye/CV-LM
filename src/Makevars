@@ -2,7 +2,13 @@
 CXX_STD = CXX17
 
 # Suppress Eigen's "ignoring attributes" warnings
-PKG_CPPFLAGS = -Wno-ignored-attributes
+PKG_CXXFLAGS += -Wno-ignored-attributes
+
+# Eigen BDCSVD documentation states "this algorithm is unlikely to provide accurate result when compiled
+# with unsafe math optimizations. For instance, this concerns Intel's compiler (ICC), which performs such
+# optimization by default unless you compile with the -fp-model precise option. Likewise, the -ffast-math
+# option of GCC or clang will significantly degrade the accuracy."
+PKG_CXXFLAGS += -fno-fast-math -fno-unsafe-math-optimizations
 
 # Link against RcppParallel
 PKG_LIBS += $(shell ${R_HOME}/bin/Rscript -e "RcppParallel::RcppParallelLibs()")

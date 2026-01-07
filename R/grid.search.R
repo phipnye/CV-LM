@@ -5,8 +5,8 @@
 grid.search <- function(
   formula,
   data,
-  subset,
-  na.action,
+  subset = NULL,
+  na.action = NULL,
   K = 10L,
   generalized = FALSE,
   seed = 1L,
@@ -16,7 +16,13 @@ grid.search <- function(
   penalize.intercept = FALSE
 ) {
   # Extract data
-  dat <- .prepare_lm_data(formula, data, subset, na.action)
+  dat <- .prepare_lm_data(
+    formula,
+    data,
+    subset,
+    na.action,
+    env = parent.frame()
+  )
   y <- dat$y
   X <- dat$X
   mt <- dat$mt
@@ -40,7 +46,7 @@ grid.search <- function(
 
   # Precision / step size
   precision <- .assert_double_scalar(precision, "precision", nonneg = TRUE)
-  
+
   # Make sure the grid isn't an unreasonable size
   .assert_sensible_grid(max.lambda, precision)
 

@@ -1,5 +1,6 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
+#include <limits.h>
 
 #include <utility>
 
@@ -8,7 +9,8 @@
 #include "CV-Utils-utils.h"
 #include "CV-WorkerModel.h"
 #include "CV-engine.h"
-#include "Grid-Utils-utils.h"
+#include "Grid-Generator.h"
+#include "Grid-LambdaCV.h"
 #include "Grid-engine.h"
 
 // [[Rcpp::export(name="cv.lm.rcpp")]]
@@ -50,13 +52,20 @@ Rcpp::List gridSearch(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                       const int k0, const double maxLambda,
                       const double precision, const bool generalized,
                       const int seed, const int nThreads, const bool centered) {
-  // Generate lambdas sequence
-  const Eigen::VectorXd lambdas{Grid::Utils::lambdasSeq(maxLambda, precision)};
-  std::pair<double, double> results;
+  // Light weight generator for creating lambda values
+  const Grid::Generator lambdasGrid{maxLambda, precision};
+
+  // Limit the grid size
+  if (static_cast<int>(lambdasGrid.size()) > std::numeric_limits<int>::max()) {
+    Rcpp::stop("Lambda grid is too large.");
+  }
+
+  // Optimal CV results in the form [CV, lambda]
+  Grid::LambdaCV results;
 
   // Generalized CV
   if (generalized) {
-    results = Grid::gcv(y, x, lambdas, nThreads, centered);
+    results = Grid::gcv(y, x, lambdasGrid, nThreads, centered);
   } else {
     // Determine a valid number of folds as close to the passed argument as
     // possible
@@ -66,12 +75,12 @@ Rcpp::List gridSearch(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 
     // Leave-one-out CV
     if (k == nrow) {
-      results = Grid::loocv(y, x, lambdas, nThreads, centered);
+      results = Grid::loocv(y, x, lambdasGrid, nThreads, centered);
     } else {  // K-fold CV
-      results = Grid::kcv(y, x, k, lambdas, seed, nThreads);
+      results = Grid::kcv(y, x, k, lambdasGrid, seed, nThreads);
     }
   }
 
-  return Rcpp::List::create(Rcpp::Named("CV") = results.first,
-                            Rcpp::Named("lambda") = results.second);
+  return Rcpp::List::create(Rcpp::Named("CV") = results.cv,
+                            Rcpp::Named("lambda") = results.lambda);
 }

@@ -50,10 +50,10 @@ struct Worker : public RcppParallel::Worker {
         mse_{0.0},
         xTrain_(maxTrainSize, ncol_),
         yTrain_(maxTrainSize),
-        trainIdxs_(maxTrainSize),
-        testIdxs_(maxTestSize),
         beta_(ncol_),
         resid_(maxTestSize),
+        trainIdxs_(maxTrainSize),
+        testIdxs_(maxTestSize),
         model_{std::forward<Args>(modelArgs)...} {}
 
   // Split Ctor
@@ -67,10 +67,10 @@ struct Worker : public RcppParallel::Worker {
         mse_{0.0},
         xTrain_(other.xTrain_.rows(), other.xTrain_.cols()),
         yTrain_(other.yTrain_.size()),
-        trainIdxs_(other.trainIdxs_.size()),
-        testIdxs_(other.testIdxs_.size()),
         beta_(other.beta_.size()),
         resid_(other.resid_.size()),
+        trainIdxs_(other.trainIdxs_.size()),
+        testIdxs_(other.testIdxs_.size()),
         model_{other.model_} {}
 
   // parallelReduce requires an operator() to perform the work

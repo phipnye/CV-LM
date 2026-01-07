@@ -7,13 +7,16 @@
 #include <limits>
 #include <utility>
 
+#include "Grid-Generator.h"
+#include "Grid-LambdaCV.h"
+
 namespace Grid::Deterministic {
 
 // Base class for searching grid of deterministic CV (LOOCV and GCV) results
 template <typename WorkerPolicy>
 struct Worker : public RcppParallel::Worker {
   // References
-  const Eigen::VectorXd& lambdas_;
+  const Generator& lambdasGrid_;
   const Eigen::ArrayXd& eigenValsSq_;
 
   // Sizes
@@ -25,32 +28,34 @@ struct Worker : public RcppParallel::Worker {
   // Thread-local buffer for repeated denominator computations
   Eigen::ArrayXd denom_;
 
-  // Reduction result: (best CV, best lambda)
-  std::pair<double, double> results_;
+  // Reduction result: (corresponding lambda, best CV)
+  LambdaCV results_;
 
   // Policy (owns all calculation-specific data)
   WorkerPolicy policy_;
 
   // Main ctor
-  explicit Worker(const Eigen::VectorXd& lambdas,
+  explicit Worker(const Generator& lambdasGrid,
                   const Eigen::ArrayXd& eigenValsSq, const Eigen::Index nrow,
                   const bool centered, WorkerPolicy policy)
-      : lambdas_{lambdas},
+      : lambdasGrid_{lambdasGrid},
         eigenValsSq_{eigenValsSq},
         nrow_{nrow},
         centered_{centered},
         denom_(eigenValsSq.size()),
-        results_{std::numeric_limits<double>::infinity(), 0.0},
+        // [lambda, CV]
+        results_{0.0, std::numeric_limits<double>::infinity()},
         policy_{std::move(policy)} {}
 
   // Split ctor
   explicit Worker(const Worker& other, const RcppParallel::Split)
-      : lambdas_{other.lambdas_},
+      : lambdasGrid_{other.lambdasGrid_},
         eigenValsSq_{other.eigenValsSq_},
         nrow_{other.nrow_},
         centered_{other.centered_},
         denom_(other.denom_.size()),
-        results_{std::numeric_limits<double>::infinity(), 0.0},
+        // [lambda, CV]
+        results_{0.0, std::numeric_limits<double>::infinity()},
         policy_{other.policy_} {}
 
   // parallelReduce work operator
@@ -58,7 +63,7 @@ struct Worker : public RcppParallel::Worker {
     for (Eigen::Index lambdaIdx{static_cast<Eigen::Index>(begin)},
          endIdx{static_cast<Eigen::Index>(end)};
          lambdaIdx < endIdx; ++lambdaIdx) {
-      const double lambda{lambdas_[lambdaIdx]};
+      const double lambda{lambdasGrid_[lambdaIdx]};
 
       // denom_ is reused to avoid temporary allocations and repeated
       // computations
@@ -68,16 +73,16 @@ struct Worker : public RcppParallel::Worker {
       const double cv{
           policy_.evaluate(lambda, denom_, eigenValsSq_, nrow_, centered_)};
 
-      if (cv < results_.first) {
-        results_.first = cv;
-        results_.second = lambda;
+      if (cv < results_.cv) {
+        results_.cv = cv;
+        results_.lambda = lambda;
       }
     }
   }
 
   // Join logic for parallel reduction
   void join(const Worker& other) {
-    if (other.results_.first < results_.first) {
+    if (other.results_.cv < results_.cv) {
       results_ = other.results_;
     }
   }

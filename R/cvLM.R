@@ -38,8 +38,8 @@ cvLM <- function(object, ...) UseMethod("cvLM")
 cvLM.formula <- function(
   object,
   data,
-  subset,
-  na.action,
+  subset = NULL,
+  na.action = NULL,
   K.vals = 10L,
   lambda = 0,
   generalized = FALSE,
@@ -49,7 +49,7 @@ cvLM.formula <- function(
   ...
 ) {
   # Extract data
-  dat <- .prepare_lm_data(object, data, subset, na.action)
+  dat <- .prepare_lm_data(object, data, subset, na.action, env = parent.frame())
   y <- dat$y
   X <- dat$X
   mt <- dat$mt
