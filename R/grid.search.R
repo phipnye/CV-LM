@@ -5,8 +5,8 @@
 grid.search <- function(
   formula,
   data,
-  subset = NULL,
-  na.action = NULL,
+  subset,
+  na.action,
   K = 10L,
   generalized = FALSE,
   seed = 1L,
@@ -15,17 +15,22 @@ grid.search <- function(
   precision = 0.1,
   penalize.intercept = FALSE
 ) {
-  # Extract data
-  dat <- .prepare_lm_data(
-    formula,
-    data,
-    subset,
-    na.action,
-    env = parent.frame()
-  )
-  y <- dat$y
-  X <- dat$X
-  mt <- dat$mt
+  # --- Extract data
+
+  mf <- match.call(expand.dots = FALSE)
+  m <- match(c("object", "data", "subset", "na.action"), names(mf), 0L)
+  mf <- mf[c(1L, m)]
+  mf$drop.unused.levels <- TRUE
+  mf[[1L]] <- quote(stats::model.frame)
+  mf <- eval(mf, parent.frame())
+  mt <- attr(mf, "terms")
+
+  if (is.empty.model(mt)) {
+    stop("Empty model specified.", call. = FALSE)
+  }
+
+  X <- model.matrix(mt, mf)
+  y <- model.response(mf, "double")
 
   # --- Confirm validity of arguments
 

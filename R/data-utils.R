@@ -19,32 +19,3 @@
 
   list(y = y, X = X)
 }
-
-.prepare_lm_data <- function(object, data, subset = NULL, na.action = NULL, env = parent.frame()) {
-  if (!inherits(object, "formula")) stop("`object` must be a formula.", call. = FALSE)
-  
-  mf_args <- list(
-    formula = object,
-    data = data,
-    drop.unused.levels = TRUE
-  )
-  if (!is.null(subset)) mf_args$subset <- subset
-  if (!is.null(na.action)) mf_args$na.action <- na.action
-  
-  mf <- do.call(stats::model.frame, mf_args, envir = env)
-  
-  mt <- attr(mf, "terms")
-  if (is.null(mt)) stop("No terms object found.", call. = FALSE)
-  
-  y <- model.response(mf, type = "numeric")
-  if (is.null(y)) stop("Response must be numeric.", call. = FALSE)
-  
-  X <- model.matrix(mt, mf)
-  if (!is.numeric(y)) stop("Response variable must be numeric.")
-  if (!is.matrix(X) || !is.numeric(X)) stop("Design matrix must be a numeric matrix.")
-  
-  attr(X, "xlevels") <- .getXlevels(mt, mf)
-  attr(y, "na.action") <- attr(mf, "na.action")
-  
-  list(y = y, X = X, mt = mt)
-}

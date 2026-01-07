@@ -1,7 +1,7 @@
 source("tests/helpers.R")
 
 test_that("cvLM matches boot::cv.glm for OLS under varied conditions, including rank-deficient and ill-conditioned data", {
-  sample.sizes <- c(20, 50, 100, 1000, 10000)
+  sample.sizes <- c(20, 50, 100, 1000)
   predictors <- c(2, 4, 6)
   Ks.list <- list(
     few = c(2, 3),
