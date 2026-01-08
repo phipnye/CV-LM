@@ -32,6 +32,8 @@ struct Worker : RcppParallel::Worker {
 
   // Fit-specific data (e.g., lambda for Ridge)
   Model model_;
+  Eigen::ComputationInfo
+      info_;  // whether cholesky decomposition was successful
 
   // Main Ctor
   explicit Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
@@ -100,6 +102,12 @@ struct Worker : RcppParallel::Worker {
       model_.computeBeta(xTrain_.topRows(trainSize), yTrain_.head(trainSize),
                          beta_);
 
+      // Check whether computation was successful (only affect LDLT case)
+      if (model_.info_ != Eigen::Success) {
+        info_ = model_.info_;
+        return;
+      }
+
       // Evaluate performance on hold-out fold (MSE)
       resid_.head(testSize) = y_(testIdxs_.head(testSize));
       resid_.head(testSize).noalias() -=
@@ -114,7 +122,19 @@ struct Worker : RcppParallel::Worker {
 
   // parallelReduce uses join method to compose the operations of two worker
   // instances
-  void join(const Worker& other) { mse_ += other.mse_; }
+  void join(const Worker& other) {
+    // Record unsuccessful decompositions
+    if (info_ != Eigen::Success) {
+      return;
+    }
+
+    if (other.info_ != Eigen::Success) {
+      info_ = other.info_;
+      return;
+    }
+
+    mse_ += other.mse_;
+  }
 };
 
 }  // namespace CV

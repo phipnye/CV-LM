@@ -93,4 +93,27 @@ std::pair<Eigen::Index, Eigen::Index> testSizeExtrema(
   return {static_cast<Eigen::Index>(*minIt), static_cast<Eigen::Index>(*maxIt)};
 }
 
+// Check for success of LDLT decomposition
+void checkLdltStatus(const Eigen::ComputationInfo info) {
+  if (info == Eigen::Success) {
+    return;
+  }
+
+  // Documentation states NumericalIssue is the only non-success message for
+  // LDLT "Returns: Success if computation was successful, NumericalIssue if the
+  // factorization failed because of a zero pivot."
+  switch (info) {
+    case Eigen::NumericalIssue:
+      Rcpp::stop(
+          "LDLT failed: Numerical issue (zero pivot). This suggests the matrix "
+          "X'X + lambda*I is singular. Try increasing the regularization "
+          "lambda or checking for columns with constant values/low variance.");
+      break;
+
+    default:
+      Rcpp::stop("LDLT failed: An unknown error occurred.");
+      break;
+  }
+}
+
 }  // namespace CV::Utils

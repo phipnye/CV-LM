@@ -37,6 +37,9 @@ struct Worker : RcppParallel::Worker {
   // Pre-allocate for SVD
   Eigen::BDCSVD<Eigen::MatrixXd> svd_;
 
+  // Flag indicating success of decompositions
+  Eigen::ComputationInfo info_;
+
   // Ctor
   explicit Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                   const Eigen::VectorXi& foldIDs,

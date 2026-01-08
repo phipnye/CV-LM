@@ -14,7 +14,8 @@ Fit::Fit(Eigen::VectorXd y, const Eigen::MatrixXd& x, const double threshold,
         Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(x.rows(), x.cols());
 
         // Prescribe threshold to QR decomposition where singular values are
-        // considered zero
+        // considered zero "A pivot will be considered nonzero if its absolute
+        // value is strictly greater than |pivot|⩽threshold×|maxpivot| "
         qr.setThreshold(threshold);
 
         // Perform QR decomposition XP = QR

@@ -101,6 +101,9 @@ LambdaCV kcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
   constexpr std::size_t grainSize{1};
   RcppParallel::parallelReduce(begin, end, worker, grainSize, nThreads);
 
+  // Make sure SVD worked consistently
+  Utils::checkSvdStatus(worker.info_);
+
   // Find the best lambda from the accumulated MSE vector
   Eigen::Index bestIdx;
   const double minMSE{worker.mses_.minCoeff(&bestIdx)};

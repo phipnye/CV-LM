@@ -27,9 +27,11 @@ Worker::Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
       diagD_(x.cols()),
       trainIdxs_(maxTrainSize),
       testIdxs_(maxTestSize),
-      svd_(maxTrainSize, x.cols(), Eigen::ComputeThinU | Eigen::ComputeThinV) {
+      svd_(maxTrainSize, x.cols(), Eigen::ComputeThinU | Eigen::ComputeThinV),
+      info_{Eigen::Success} {
   // Prescribe threshold to SVD decomposition where singular values are
-  // considered zero
+  // considered zero "A singular value will be considered nonzero if its value
+  // is strictly greater than |singularvalue|⩽threshold×|maxsingularvalue|."
   svd_.setThreshold(threshold);
 }
 
@@ -51,9 +53,8 @@ Worker::Worker(const Worker& other, const RcppParallel::Split)
       trainIdxs_(other.trainIdxs_.size()),
       testIdxs_(other.testIdxs_.size()),
       svd_(other.svd_.rows(), other.svd_.cols(),
-           Eigen::ComputeThinU | Eigen::ComputeThinV) {
-  // Prescribe threshold to SVD decomposition where singular values are
-  // considered zero
+           Eigen::ComputeThinU | Eigen::ComputeThinV),
+      info_{other.info_} {
   svd_.setThreshold(other.svd_.threshold());
 }
 
@@ -80,6 +81,14 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
 
     // Perform SVD on training set
     svd_.compute(x_(trainIdxs_.head(trainSize), Eigen::all));
+
+    // Make sure SVD is successful
+    if (const Eigen::ComputationInfo info{svd_.info()};
+        info != Eigen::Success) {
+      info_ = info;
+      return;
+    }
+
     const auto& u{svd_.matrixU()};
     const auto& v{svd_.matrixV()};
     uty_.noalias() = u.transpose() * y_(trainIdxs_.head(trainSize));
@@ -110,7 +119,19 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
   }
 }
 
-// reduce results
-void Worker::join(const Worker& other) { mses_ += other.mses_; }
+// Reduce results
+void Worker::join(const Worker& other) {
+  // Record unsuccessful decompositions
+  if (info_ != Eigen::Success) {
+    return;
+  }
+
+  if (other.info_ != Eigen::Success) {
+    info_ = other.info_;
+    return;
+  }
+
+  mses_ += other.mses_;
+}
 
 }  // namespace Grid::Stochastic

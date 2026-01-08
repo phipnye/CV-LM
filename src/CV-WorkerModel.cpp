@@ -10,13 +10,14 @@ WorkerModel::WorkerModel(const Eigen::Index ncol,
                          const Eigen::Index maxTrainSize,
                          const double threshold)
     : qr_(maxTrainSize, ncol) {
-  // Threshold at which to consider singular values zero
+  // Threshold at which to consider singular values zero "A pivot will be
+  // considered nonzero if its absolute value is strictly greater than
+  // |pivot|⩽threshold×|maxpivot| "
   qr_.setThreshold(threshold);
 }
 
 WorkerModel::WorkerModel(const WorkerModel& other)
-    : qr_(other.qr_.rows(), other.qr_.cols()) {
-  // Threshold at which to consider singular values zero
+    : info_{other.info_}, qr_(other.qr_.rows(), other.qr_.cols()) {
   qr_.setThreshold(other.qr_.threshold());
 }
 
@@ -63,10 +64,14 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
 namespace Ridge {
 
 WorkerModel::WorkerModel(const Eigen::Index ncol, const double lambda)
-    : lambda_{lambda}, xtxLambda_(ncol, ncol), ldlt_(ncol) {}
+    : info_{Eigen::Success},
+      lambda_{lambda},
+      xtxLambda_(ncol, ncol),
+      ldlt_(ncol) {}
 
 WorkerModel::WorkerModel(const WorkerModel& other)
-    : lambda_{other.lambda_},
+    : info_{other.info_},
+      lambda_{other.lambda_},
       xtxLambda_(other.xtxLambda_.rows(), other.xtxLambda_.cols()),
       ldlt_(other.ldlt_.cols()) {}
 
@@ -90,9 +95,10 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
   // perform the decomposition in place here
   ldlt_.compute(xtxLambda_);
 
-  // if (ldlt.info() != Eigen::Success) {
-  // TO DO
-  // }
+  if (const Eigen::ComputationInfo info{ldlt_.info()}; info != Eigen::Success) {
+    info_ = info;
+    return;
+  }
 
   // LDLT::solve supports in-place solves which we use here for efficiency
   ldlt_.solveInPlace(beta);  // just returns true (no need to check)

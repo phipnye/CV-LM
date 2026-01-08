@@ -7,6 +7,8 @@ namespace CV {
 namespace OLS {
 
 struct WorkerModel {
+  Eigen::ComputationInfo info_{
+      Eigen::Success};  // ColPivHouseholderQR::info always returns success
   Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr_;
 
   explicit WorkerModel(Eigen::Index ncol, Eigen::Index maxTrainSize,
@@ -26,6 +28,7 @@ struct WorkerModel {
 namespace Ridge {
 
 struct WorkerModel {
+  Eigen::ComputationInfo info_;
   const double lambda_;
   Eigen::MatrixXd xtxLambda_;
   Eigen::LDLT<Eigen::MatrixXd> ldlt_;
