@@ -4,16 +4,20 @@
 #include <RcppParallel.h>
 
 #include <cstddef>
+#include <type_traits>
 #include <utility>
 
 #include "CV-Utils-utils.h"
 #include "CV-Worker.h"
+#include "CV-WorkerModel.h"
+#include "CV-WorkerModelFactory.h"
 
 namespace CV {
 
 // Generalized cross-validation for linear and ridge regression
 template <typename FitType, typename... Args>
-double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, Args&&... args) {
+[[nodiscard]] double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+                         Args&&... args) {
   constexpr bool needHat{false};  // GCV doesn't need full diagonal entries of
                                   // the hat matrix, just the trace
   const FitType fit{y, x, std::forward<Args>(args)..., needHat};
@@ -22,8 +26,8 @@ double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, Args&&... args) {
 
 // Leave-one-out cross-validation for linear and ridge regression
 template <typename FitType, typename... Args>
-double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-             Args&&... args) {
+[[nodiscard]] double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+                           Args&&... args) {
   constexpr bool needHat{
       true};  // LOOCV requires full diagonal entries of the hat matrix
   const FitType fit{y, x, std::forward<Args>(args)..., needHat};
@@ -32,8 +36,9 @@ double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 
 // Multi-threaded CV for linear and ridge regression
 template <typename WorkerModelType, typename... Args>
-double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
-             const int seed, const int nThreads, Args&&... modelArgs) {
+[[nodiscard]] double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+                           const int k, const int seed, const int nThreads,
+                           Args&&... lambda) {
   // Setup folds
   const Eigen::Index nrow{x.rows()};
   const auto [foldIDs,
@@ -44,14 +49,28 @@ double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
   const auto [minTestSize, maxTestSize]{Utils::testSizeExtrema(foldSizes)};
   const Eigen::Index maxTrainSize{nrow - minTestSize};
 
-  // Initialize the templated worker with model-specific arguments (like lambda)
-  Worker<WorkerModelType> worker{y,
-                                 x,
-                                 foldIDs,
-                                 foldSizes,
-                                 maxTrainSize,
-                                 maxTestSize,
-                                 std::forward<Args>(modelArgs)...};
+  // Generate a WorkerModelFactory for generating worker models with
+  // pre-allocated memory
+  const auto factory{[&]() {
+    if constexpr (std::is_same_v<WorkerModelType, OLS::WorkerModel>) {
+      // OLS model requires the training size for pre-allocation of QR
+      return OLS::WorkerModelFactory{x.cols(), maxTrainSize};
+    } else if constexpr (std::is_same_v<WorkerModelType, Ridge::WorkerModel>) {
+      // Ridge model doesn't need train size since we're using cholesky of
+      // regularized covariance matrix but does need lambda
+      return Ridge::WorkerModelFactory{x.cols(), std::forward<Args>(lambda)...};
+    } else {
+      // Raise a build error if we pass some unexpected configuration
+      static_assert(!std::is_same_v<WorkerModelType, WorkerModelType>,
+                    "Unsupported model type");
+    }
+  }()};
+
+  // Initialize the templated worker with a factory object to construct a worker
+  // model with pre-allocated memory for the decomposition and coefficient
+  // computation
+  Worker<WorkerModelType, decltype(factory)> worker{
+      y, x, foldIDs, foldSizes, maxTrainSize, maxTestSize, factory};
 
   // Compute CV result
   constexpr std::size_t begin{0};

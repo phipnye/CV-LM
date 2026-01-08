@@ -4,12 +4,11 @@
 #include <RcppParallel.h>
 
 #include <cstddef>
-#include <utility>
 
 namespace CV {
 
-template <typename Model>
-struct Worker : public RcppParallel::Worker {
+template <typename Model, typename ModelFactory>
+struct Worker : RcppParallel::Worker {
   // References
   const Eigen::VectorXd& y_;
   const Eigen::MatrixXd& x_;
@@ -35,12 +34,11 @@ struct Worker : public RcppParallel::Worker {
   Model model_;
 
   // Main Ctor
-  template <typename... Args>
   explicit Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                   const Eigen::VectorXi& foldIDs,
                   const Eigen::VectorXi& foldSizes,
                   const Eigen::Index maxTrainSize,
-                  const Eigen::Index maxTestSize, Args&&... modelArgs)
+                  const Eigen::Index maxTestSize, const ModelFactory& factory)
       : y_{y},
         x_{x},
         foldIDs_{foldIDs},
@@ -54,7 +52,7 @@ struct Worker : public RcppParallel::Worker {
         resid_(maxTestSize),
         trainIdxs_(maxTrainSize),
         testIdxs_(maxTestSize),
-        model_{std::forward<Args>(modelArgs)...} {}
+        model_{factory()} {}
 
   // Split Ctor
   explicit Worker(const Worker& other, const RcppParallel::Split)
@@ -74,7 +72,7 @@ struct Worker : public RcppParallel::Worker {
         model_{other.model_} {}
 
   // parallelReduce requires an operator() to perform the work
-  void operator()(const std::size_t begin, const std::size_t end) {
+  void operator()(const std::size_t begin, const std::size_t end) override {
     // Casting from std::size_t to int is safe here (end is the number of folds
     // which is a signed 32-bit integer from R)
     for (int foldID{static_cast<int>(begin)}, endID{static_cast<int>(end)};

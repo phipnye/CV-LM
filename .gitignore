@@ -1,6 +1,7 @@
 .Rproj.user
 .Rhistory
 .RData
+compile_commands.json
 src/*.o
 src/*.so
 src/*.rds

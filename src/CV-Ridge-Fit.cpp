@@ -23,7 +23,7 @@ Fit::Fit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
         // problems like D^*D x = b, for that purpose, we recommend the Cholesky
         // decomposition without square root which is more stable and even
         // faster." LDLT supports in-place decomposition
-        Eigen::LDLT<Eigen::Ref<Eigen::MatrixXd>> ldlt{xtxLambda};
+        const Eigen::LDLT<Eigen::Ref<Eigen::MatrixXd>> ldlt{xtxLambda};
 
         // LDLT supports solving in-place
         Eigen::MatrixXd xtxLambdaInv{Eigen::MatrixXd::Identity(ncol_, ncol_)};
@@ -40,7 +40,7 @@ Fit::Fit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
     // If the data was centered in R, we need to add 1/n to the diagonal entries
     // to capture the dropped intercept column
     if (centered) {
-      diagH_ += (1.0 / nrow_);
+      diagH_ += (1.0 / static_cast<double>(nrow_));
     }
   }
 }
@@ -64,10 +64,12 @@ double Fit::loocv() const {
 double Fit::rss() const { return resid_.squaredNorm(); }
 
 // Mean squared error
-double Fit::mse() const { return rss() / nrow_; }
+double Fit::mse() const { return rss() / static_cast<double>(nrow_); }
 
 // Mean residual leverage = (1 - trace(H)/n)
-double Fit::meanResidualLeverage() const { return 1.0 - (traceH() / nrow_); }
+double Fit::meanResidualLeverage() const {
+  return 1.0 - (traceH() / static_cast<double>(nrow_));
+}
 
 double Fit::traceH() const {
   // trace(H) = trace(X * (X'X + lambda*I)^-1 * X')

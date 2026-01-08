@@ -14,7 +14,7 @@ namespace Grid::Deterministic {
 
 // Base class for searching grid of deterministic CV (LOOCV and GCV) results
 template <typename WorkerPolicy>
-struct Worker : public RcppParallel::Worker {
+struct Worker : RcppParallel::Worker {
   // References
   const Generator& lambdasGrid_;
   const Eigen::ArrayXd& eigenValsSq_;
@@ -59,7 +59,7 @@ struct Worker : public RcppParallel::Worker {
         policy_{other.policy_} {}
 
   // parallelReduce work operator
-  void operator()(const std::size_t begin, const std::size_t end) {
+  void operator()(const std::size_t begin, const std::size_t end) override {
     for (Eigen::Index lambdaIdx{static_cast<Eigen::Index>(begin)},
          endIdx{static_cast<Eigen::Index>(end)};
          lambdaIdx < endIdx; ++lambdaIdx) {
@@ -88,4 +88,4 @@ struct Worker : public RcppParallel::Worker {
   }
 };
 
-};  // namespace Grid::Deterministic
+}  // namespace Grid::Deterministic

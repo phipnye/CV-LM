@@ -6,21 +6,28 @@ namespace CV {
 
 namespace OLS {
 
+WorkerModel::WorkerModel(const Eigen::Index ncol,
+                         const Eigen::Index maxTrainSize)
+    : qr_(maxTrainSize, ncol) {}
+
+WorkerModel::WorkerModel(const WorkerModel& other)
+    : qr_(other.qr_.rows(), other.qr_.cols()) {}
+
 void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                               const Eigen::Ref<const Eigen::VectorXd>& yTrain,
-                              Eigen::VectorXd& beta) const {
+                              Eigen::VectorXd& beta) {
   // Decompose training set into the for XP = QR
-  const Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr{xTrain};
+  qr_.compute(xTrain);
 
   // if (qr.info() != Eigen::Success) {
   //   Not necessary, Eigen documents this always returns success
   // }
 
-  const Eigen::Index rank{qr.rank()};
+  const Eigen::Index rank{qr_.rank()};
 
   // No rank deficiency
   if (rank == xTrain.cols()) {
-    beta = qr.solve(yTrain);
+    beta = qr_.solve(yTrain);
     return;
   }
 
@@ -30,34 +37,35 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                 // ColPivHouseholderQR::solve does not support in-place solving
                 // like LDLT and this is a special case of rank-deficiency
                 // (hopefully rare)
-  qty.applyOnTheLeft(qr.householderQ().transpose());
+  qty.applyOnTheLeft(qr_.householderQ().transpose());
   beta.setZero();
 
   // Solve Rz = Q'y for the first 'rank' elements using the top-left rank x rank
   // part of Matrix R
-  beta.head(rank) = qr.matrixR()
+  beta.head(rank) = qr_.matrixR()
                         .topLeftCorner(rank, rank)
                         .triangularView<Eigen::Upper>()
                         .solve(qty.head(rank));
 
   // Permute back to original column order
-  beta.applyOnTheLeft(qr.colsPermutation());
+  beta.applyOnTheLeft(qr_.colsPermutation());
 }
 
 }  // namespace OLS
 
 namespace Ridge {
 
-WorkerModel::WorkerModel(const double lambda, const Eigen::Index ncol)
-    : lambda_{lambda}, xtxLambda_(ncol, ncol) {}
+WorkerModel::WorkerModel(const Eigen::Index ncol, const double lambda)
+    : lambda_{lambda}, xtxLambda_(ncol, ncol), ldlt_(ncol) {}
 
 WorkerModel::WorkerModel(const WorkerModel& other)
     : lambda_{other.lambda_},
-      xtxLambda_(other.xtxLambda_.rows(), other.xtxLambda_.cols()) {}
+      xtxLambda_(other.xtxLambda_.rows(), other.xtxLambda_.cols()),
+      ldlt_(other.ldlt_.cols()) {}
 
 void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                               const Eigen::Ref<const Eigen::VectorXd>& yTrain,
-                              Eigen::VectorXd& beta) const {
+                              Eigen::VectorXd& beta) {
   // Generate cross-products (re-use pre-allocated buffers)
   xtxLambda_.setZero();
   xtxLambda_.diagonal().fill(lambda_);
@@ -73,14 +81,14 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
   // like D^*D x = b, for that purpose, we recommend the Cholesky decomposition
   // without square root which is more stable and even faster." We can also
   // perform the decomposition in place here
-  const Eigen::LDLT<Eigen::Ref<Eigen::MatrixXd>> ldlt{xtxLambda_};
+  ldlt_.compute(xtxLambda_);
 
   // if (ldlt.info() != Eigen::Success) {
   // TO DO
   // }
 
   // LDLT::solve supports in-place solves which we use here for efficiency
-  ldlt.solveInPlace(beta);  // just returns true (no need to check)
+  ldlt_.solveInPlace(beta);  // just returns true (no need to check)
 }
 
 }  // namespace Ridge

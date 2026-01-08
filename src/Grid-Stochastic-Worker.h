@@ -3,6 +3,7 @@
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
+// ReSharper disable once CppUnusedIncludeDirective
 #include <cstddef>
 
 #include "Grid-Generator.h"
@@ -37,14 +38,14 @@ struct Worker : RcppParallel::Worker {
   explicit Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                   const Eigen::VectorXi& foldIDs,
                   const Eigen::VectorXi& foldSizes,
-                  const Generator& lambdasGrid, const Eigen::Index maxTrainSize,
-                  const Eigen::Index maxTestSize);
+                  const Generator& lambdasGrid, Eigen::Index maxTrainSize,
+                  Eigen::Index maxTestSize);
 
   // Split ctor
-  Worker(const Worker& other, const RcppParallel::Split);
+  Worker(const Worker& other, RcppParallel::Split);
 
   // RcppParallel requires an operator() to perform the work
-  void operator()(const std::size_t begin, const std::size_t end) override;
+  void operator()(std::size_t begin, std::size_t end) override;
 
   // parallelReduce uses join to compose the operations of two worker instances
   // that were previously split

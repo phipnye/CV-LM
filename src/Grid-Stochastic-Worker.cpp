@@ -90,10 +90,12 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
       resid_.head(testSize) = y_(testIdxs_.head(testSize));
       resid_.head(testSize).noalias() -=
           (x_(testIdxs_.head(testSize), Eigen::all) * beta_);
-      const double foldMSE{resid_.head(testSize).squaredNorm() / testSize};
+      const double foldMSE{resid_.head(testSize).squaredNorm() /
+                           static_cast<double>(testSize)};
 
       // Weighted MSE contribution
-      const double alpha{static_cast<double>(testSize) / nrow_};
+      const double alpha{static_cast<double>(testSize) /
+                         static_cast<double>(nrow_)};
       mses_[lambdaIdx] += (alpha * foldMSE);
     }
   }
@@ -102,4 +104,4 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
 // reduce results
 void Worker::join(const Worker& other) { mses_ += other.mses_; }
 
-};  // namespace Grid::Stochastic
+}  // namespace Grid::Stochastic

@@ -25,8 +25,9 @@ double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
                    ((lambda * lambda) * utySq_ / denom.square()).sum()};
 
   // GCV = MSE / (1 - trance(H) / n)^2
-  const double meanResidLeverage{1.0 - traceH / nrow};
-  return rss / (nrow * meanResidLeverage * meanResidLeverage);
+  const double meanResidLeverage{1.0 - traceH / static_cast<double>(nrow)};
+  return rss /
+         (static_cast<double>(nrow) * meanResidLeverage * meanResidLeverage);
 }
 
 }  // namespace GCV
@@ -68,7 +69,7 @@ double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
 
   // Add 1/n to account for the unpenalized intercept if the data was centered
   if (centered) {
-    diagH_.array() += (1.0 / nrow);
+    diagH_.array() += (1.0 / static_cast<double>(nrow));
   }
 
   // Calculate Ridge residuals: e = y - y_hat = yNull + U * [(lambda /

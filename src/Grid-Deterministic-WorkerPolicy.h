@@ -10,15 +10,15 @@ struct WorkerPolicy {
   const Eigen::ArrayXd& utySq_;
   const double rssNull_;
 
-  WorkerPolicy(const Eigen::ArrayXd& utySq, const double rssNull);
+  WorkerPolicy(const Eigen::ArrayXd& utySq, double rssNull);
   WorkerPolicy(const WorkerPolicy&) = default;
   WorkerPolicy(WorkerPolicy&&) = default;
   WorkerPolicy& operator=(const WorkerPolicy&) = delete;
   WorkerPolicy& operator=(WorkerPolicy&&) = delete;
 
-  double evaluate(const double lambda, const Eigen::ArrayXd& denom,
-                  const Eigen::ArrayXd& eigenValsSq, const Eigen::Index nrow,
-                  const bool centered) const;
+  [[nodiscard]] double evaluate(double lambda, const Eigen::ArrayXd& denom,
+                                const Eigen::ArrayXd& eigenValsSq,
+                                Eigen::Index nrow, bool centered) const;
 };
 
 }  // namespace GCV
@@ -39,15 +39,15 @@ struct WorkerPolicy {
 
   WorkerPolicy(const Eigen::VectorXd& yNull, const Eigen::MatrixXd& u,
                const Eigen::MatrixXd& uSq, const Eigen::VectorXd& uty,
-               const Eigen::Index nrow, const Eigen::Index eigenValSize);
+               Eigen::Index nrow, Eigen::Index eigenValSize);
   WorkerPolicy(const WorkerPolicy& other);
   WorkerPolicy(WorkerPolicy&&) = default;
   WorkerPolicy& operator=(const WorkerPolicy&) = delete;
   WorkerPolicy& operator=(WorkerPolicy&&) = delete;
 
-  double evaluate(const double lambda, const Eigen::ArrayXd& denom,
-                  const Eigen::ArrayXd& eigenValsSq, const Eigen::Index nrow,
-                  const bool centered) const;
+  [[nodiscard]] double evaluate(double lambda, const Eigen::ArrayXd& denom,
+                                const Eigen::ArrayXd& eigenValsSq,
+                                Eigen::Index nrow, bool centered) const;
 };
 
 }  // namespace LOOCV

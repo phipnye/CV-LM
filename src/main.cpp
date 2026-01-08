@@ -1,8 +1,7 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
-#include <limits.h>
 
-#include <utility>
+#include <limits>
 
 #include "CV-OLS-Fit.h"
 #include "CV-Ridge-Fit.h"
@@ -44,7 +43,7 @@ double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   // K-fold CV
   return useOLS ? CV::parCV<CV::OLS::WorkerModel>(y, x, k, seed, nThreads)
                 : CV::parCV<CV::Ridge::WorkerModel>(y, x, k, seed, nThreads,
-                                                    lambda, x.cols());
+                                                    lambda);
 }
 
 // [[Rcpp::export(name="grid.search.rcpp")]]
@@ -61,7 +60,7 @@ Rcpp::List gridSearch(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   }
 
   // Optimal CV results in the form [CV, lambda]
-  Grid::LambdaCV results;
+  Grid::LambdaCV results{0.0, std::numeric_limits<double>::infinity()};
 
   // Generalized CV
   if (generalized) {
@@ -71,10 +70,9 @@ Rcpp::List gridSearch(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
     // possible
     const int nrow{
         static_cast<int>(x.rows())};  // safe (cannot exceed 2^31 - 1)
-    const int k{CV::Utils::kCheck(nrow, k0)};
 
     // Leave-one-out CV
-    if (k == nrow) {
+    if (const int k{CV::Utils::kCheck(nrow, k0)}; k == nrow) {
       results = Grid::loocv(y, x, lambdasGrid, nThreads, centered);
     } else {  // K-fold CV
       results = Grid::kcv(y, x, k, lambdasGrid, seed, nThreads);

@@ -52,9 +52,6 @@ grid.search <- function(
   # Precision / step size
   precision <- .assert_double_scalar(precision, "precision", nonneg = TRUE)
 
-  # Make sure the grid isn't an unreasonable size
-  .assert_sensible_grid(max.lambda, precision)
-
   # Whether to penalize the intercept coefficient in the case of ridge regression
   .assert_logical_scalar(penalize.intercept, "penalize.intercept")
 

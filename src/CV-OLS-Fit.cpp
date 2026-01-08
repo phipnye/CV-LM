@@ -2,11 +2,13 @@
 
 #include <RcppEigen.h>
 
+#include <utility>
+
 namespace CV::OLS {
 
 // Ctor
-Fit::Fit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const bool needHat)
-    : qr_{x}, nrow_{x.rows()}, rank_{qr_.rank()}, qty_{y} {
+Fit::Fit(Eigen::VectorXd y, const Eigen::MatrixXd& x, const bool needHat)
+    : qr_{x}, nrow_{x.rows()}, rank_{qr_.rank()}, qty_{std::move(y)} {
   qty_.applyOnTheLeft(qr_.householderQ().transpose());
 
   if (needHat) {
@@ -50,11 +52,12 @@ double Fit::rss() const {
 }
 
 // Mean squared error
-double Fit::mse() const { return rss() / nrow_; }
+double Fit::mse() const { return rss() / static_cast<double>(nrow_); }
 
 // Mean residual leverage = (1 - trace(H)/n)
 double Fit::meanResidualLeverage() const {
-  return 1.0 - (static_cast<double>(rank_) / nrow_);  // trace(H) = rank(X)
+  return 1.0 - (static_cast<double>(rank_) /
+                static_cast<double>(nrow_));  // trace(H) = rank(X)
 }
 
 Eigen::VectorXd Fit::residuals() const {
