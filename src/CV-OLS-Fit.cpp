@@ -12,10 +12,11 @@ Fit::Fit(Eigen::VectorXd y, const Eigen::MatrixXd& x, const bool needHat)
   qty_.applyOnTheLeft(qr_.householderQ().transpose());
 
   if (needHat) {
-    // Leverage values: h_ii = [X(X'X)^-1 X']_ii. Using QR (X = QR),
-    // H = QQ' so h_ii = sum_{j=1}^{rank} q_{ij}^2 (rowwise squared norm of thin
-    // Q) - instead of evaluating a potentially large Q matrix, we can use
-    // backward solving on the triangular matrix R to solve for R^-T X' = Q'
+    // Leverage values: h_ii = [X(X'X)^-1 X']_ii
+    // Using QR, H = QQ' so h_ii = sum_{j=1}^{rank} q_{ij}^2 (rowwise squared
+    // norm of thin Q) - instead of evaluating a potentially large Q matrix, we
+    // can use backward solving on the triangular matrix R to solve for R^-T X'
+    // = Q'
     diagH_ = qr_.matrixR()
                  .topLeftCorner(rank_, rank_)
                  .triangularView<Eigen::Upper>()

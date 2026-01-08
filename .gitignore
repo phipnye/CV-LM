@@ -1,6 +1,8 @@
 .Rproj.user
 .Rhistory
 .RData
+.idea/
+.clang-format
 compile_commands.json
 src/*.o
 src/*.so

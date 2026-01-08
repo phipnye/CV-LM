@@ -33,6 +33,9 @@ struct Worker : RcppParallel::Worker {
   Eigen::ArrayXd diagD_;
   Eigen::VectorXi trainIdxs_;
   Eigen::VectorXi testIdxs_;
+  
+  // Pre-allocate for SVD
+  Eigen::BDCSVD<Eigen::MatrixXd> svd_;
 
   // Ctor
   explicit Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,

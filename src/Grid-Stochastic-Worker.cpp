@@ -26,7 +26,9 @@ Worker::Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
       eigenValsSq_(x.cols()),
       diagD_(x.cols()),
       trainIdxs_(maxTrainSize),
-      testIdxs_(maxTestSize) {}
+      testIdxs_(maxTestSize),
+      svd_(maxTrainSize, x.cols(), Eigen::ComputeThinU | Eigen::ComputeThinV)
+      {}
 
 // Split ctor
 Worker::Worker(const Worker& other, const RcppParallel::Split)
@@ -44,7 +46,9 @@ Worker::Worker(const Worker& other, const RcppParallel::Split)
       eigenValsSq_(other.eigenValsSq_.size()),
       diagD_(other.diagD_.size()),
       trainIdxs_(other.trainIdxs_.size()),
-      testIdxs_(other.testIdxs_.size()) {}
+      testIdxs_(other.testIdxs_.size()),
+      svd_(other.svd_.rows(), other.svd_.cols(), Eigen::ComputeThinU | Eigen::ComputeThinV)
+      {}
 
 // Work operator
 void Worker::operator()(const std::size_t begin, const std::size_t end) {
@@ -67,14 +71,12 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
       }
     }
 
-    // SVD module does not support in-place matrix decomposition
-    const Eigen::BDCSVD<Eigen::MatrixXd> svd{
-        x_(trainIdxs_.head(trainSize), Eigen::all),
-        Eigen::ComputeThinU | Eigen::ComputeThinV};
-    const auto& u{svd.matrixU()};
-    const auto& v{svd.matrixV()};
+    // Perform SVD on training set
+    svd_.compute(x_(trainIdxs_.head(trainSize), Eigen::all));
+    const auto& u{svd_.matrixU()};
+    const auto& v{svd_.matrixV()};
     uty_.noalias() = u.transpose() * y_(trainIdxs_.head(trainSize));
-    eigenVals_ = svd.singularValues();
+    eigenVals_ = svd_.singularValues();
     eigenValsSq_ = eigenVals_.square();
 
     for (Eigen::Index lambdaIdx{0}, nLambda{lambdasGrid_.size()};
