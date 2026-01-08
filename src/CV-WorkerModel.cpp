@@ -7,11 +7,18 @@ namespace CV {
 namespace OLS {
 
 WorkerModel::WorkerModel(const Eigen::Index ncol,
-                         const Eigen::Index maxTrainSize)
-    : qr_(maxTrainSize, ncol) {}
+                         const Eigen::Index maxTrainSize,
+                         const double threshold)
+    : qr_(maxTrainSize, ncol) {
+  // Threshold at which to consider singular values zero
+  qr_.setThreshold(threshold);
+}
 
 WorkerModel::WorkerModel(const WorkerModel& other)
-    : qr_(other.qr_.rows(), other.qr_.cols()) {}
+    : qr_(other.qr_.rows(), other.qr_.cols()) {
+  // Threshold at which to consider singular values zero
+  qr_.setThreshold(other.qr_.threshold());
+}
 
 void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                               const Eigen::Ref<const Eigen::VectorXd>& yTrain,
@@ -20,7 +27,7 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
   qr_.compute(xTrain);
 
   // if (qr.info() != Eigen::Success) {
-  //   Not necessary, Eigen documents this always returns success
+  //   Not necessary, documentation states this always returns success
   // }
 
   const Eigen::Index rank{qr_.rank()};

@@ -11,6 +11,7 @@
   generalized,
   seed,
   n.threads,
+  tol,
   penalize.intercept,
   has.intercept,
   mt
@@ -31,20 +32,25 @@
 
   # Number of threads (-1 -> defaultNumThreads)
   n.threads <- .assert_valid_threads(n.threads)
+  
+  # Threshold for QR decomposition (and at which to consider lambda 0 for OLS)
+  tol <- .assert_double_scalar(tol, "tol", nonneg = TRUE)
 
   # Whether to penalize the intercept coefficient in the case of ridge regression
-  if (lambda > 0) {
+  centered <- FALSE
+  
+  if (lambda > tol) {
     .assert_logical_scalar(penalize.intercept, "penalize.intercept")
-  }
-
-  # We only center if it's a ridge regression model with an intercept
-  centered <- !penalize.intercept && lambda > 0 && has.intercept
-
-  # Center the data and drop the intercept column
-  if (centered) {
-    tmp <- .center_data(y, X, mt)
-    y <- tmp$y
-    X <- tmp$X
+  
+    # We only center if it's a ridge regression model with an intercept
+    centered <- !penalize.intercept && has.intercept
+  
+    # Center the data and drop the intercept column
+    if (centered) {
+      tmp <- .center_data(y, X, mt)
+      y <- tmp$y
+      X <- tmp$X
+    }
   }
 
   # Check for valid regression data before passing to C++
@@ -55,14 +61,15 @@
     K.vals,
     function(K) {
       cv.lm.rcpp(
-        y,
-        X,
-        K,
-        lambda,
-        generalized,
-        seed,
-        min(K, n.threads),
-        centered
+        y = y,
+        x = X,
+        k0 = K,
+        lambda = lambda,
+        generalized = generalized,
+        seed = seed,
+        nThreads = min(K, n.threads),
+        threshold = tol,
+        centered = centered
       )
     },
     numeric(1L),
@@ -85,6 +92,7 @@ cvLM.formula <- function(
   generalized = FALSE,
   seed = 1L,
   n.threads = 1L,
+  tol = 1e-7,
   penalize.intercept = FALSE,
   ...
 ) {
@@ -114,6 +122,7 @@ cvLM.formula <- function(
     generalized = generalized,
     seed = seed,
     n.threads = n.threads,
+    tol = tol,
     penalize.intercept = penalize.intercept,
     has.intercept = (attr(mt, "intercept") == 1L),
     mt = mt
@@ -129,6 +138,7 @@ cvLM.lm <- function(
   generalized = FALSE,
   seed = 1L,
   n.threads = 1L,
+  tol = 1e-7,
   penalize.intercept = FALSE,
   ...
 ) {
@@ -201,6 +211,7 @@ cvLM.lm <- function(
     generalized = generalized,
     seed = seed,
     n.threads = n.threads,
+    tol = tol,
     penalize.intercept = penalize.intercept,
     has.intercept = (attr(mt, "intercept") == 1L),
     mt = mt
@@ -215,6 +226,7 @@ cvLM.glm <- function(
   generalized = FALSE,
   seed = 1L,
   n.threads = 1L,
+  tol = 1e-7,
   penalize.intercept = FALSE,
   ...
 ) {

@@ -11,7 +11,7 @@ namespace Grid::Stochastic {
 Worker::Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                const Eigen::VectorXi& foldIDs, const Eigen::VectorXi& foldSizes,
                const Generator& lambdasGrid, const Eigen::Index maxTrainSize,
-               const Eigen::Index maxTestSize)
+               const Eigen::Index maxTestSize, const double threshold)
     : y_{y},
       x_{x},
       foldIDs_{foldIDs},
@@ -27,8 +27,11 @@ Worker::Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
       diagD_(x.cols()),
       trainIdxs_(maxTrainSize),
       testIdxs_(maxTestSize),
-      svd_(maxTrainSize, x.cols(), Eigen::ComputeThinU | Eigen::ComputeThinV)
-      {}
+      svd_(maxTrainSize, x.cols(), Eigen::ComputeThinU | Eigen::ComputeThinV) {
+  // Prescribe threshold to SVD decomposition where singular values are
+  // considered zero
+  svd_.setThreshold(threshold);
+}
 
 // Split ctor
 Worker::Worker(const Worker& other, const RcppParallel::Split)
@@ -47,8 +50,12 @@ Worker::Worker(const Worker& other, const RcppParallel::Split)
       diagD_(other.diagD_.size()),
       trainIdxs_(other.trainIdxs_.size()),
       testIdxs_(other.testIdxs_.size()),
-      svd_(other.svd_.rows(), other.svd_.cols(), Eigen::ComputeThinU | Eigen::ComputeThinV)
-      {}
+      svd_(other.svd_.rows(), other.svd_.cols(),
+           Eigen::ComputeThinU | Eigen::ComputeThinV) {
+  // Prescribe threshold to SVD decomposition where singular values are
+  // considered zero
+  svd_.setThreshold(other.svd_.threshold());
+}
 
 // Work operator
 void Worker::operator()(const std::size_t begin, const std::size_t end) {

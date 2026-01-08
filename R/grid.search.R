@@ -11,6 +11,7 @@ grid.search <- function(
   generalized = FALSE,
   seed = 1L,
   n.threads = 1L,
+  tol = 1e-7,
   max.lambda = 10000,
   precision = 0.1,
   penalize.intercept = FALSE
@@ -45,6 +46,9 @@ grid.search <- function(
 
   # Number of threads (-1 -> defaultNumThreads)
   n.threads <- .assert_valid_threads(n.threads)
+  
+  # Threshold for SVD decomposition (and tolerance at which we force inclusion of max.lambda)
+  tol <- .assert_double_scalar(tol, "tol", nonneg = TRUE)
 
   # Maximum lambda to check
   max.lambda <- .assert_double_scalar(max.lambda, "max.lambda", nonneg = TRUE)
@@ -76,6 +80,7 @@ grid.search <- function(
     generalized = generalized,
     seed = seed,
     nThreads = n.threads,
+    threshold = tol,
     centered = centered
   )
 }

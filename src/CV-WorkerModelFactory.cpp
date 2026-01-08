@@ -7,7 +7,7 @@ namespace CV {
 namespace OLS {
 
 WorkerModel WorkerModelFactory::operator()() const {
-  return WorkerModel{ncol_, maxTrainSize_};
+  return WorkerModel{ncol_, maxTrainSize_, threshold_};
 }
 
 }  // namespace OLS

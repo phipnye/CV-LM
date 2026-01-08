@@ -2,6 +2,7 @@
 
 #include <RcppEigen.h>
 
+#include <string>
 #include <utility>
 
 #include "CV-Utils-utils.h"
@@ -10,16 +11,18 @@
 #include "Grid-Generator.h"
 #include "Grid-LambdaCV.h"
 #include "Grid-Stochastic-Worker.h"
+#include "Grid-Utils-utils.h"
 
 namespace Grid {
 
 // Generalized CV
 LambdaCV gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
              const Generator& lambdasGrid, const int nThreads,
-             const bool centered) {
-  // Perform SVD on full data once (for GCV, we only need singular values and
-  // U'y)
-  const Eigen::BDCSVD<Eigen::MatrixXd> svd{x, Eigen::ComputeThinU};
+             const double threshold, const bool centered) {
+  // Decompose X with thin U computation
+  const Eigen::BDCSVD<Eigen::MatrixXd> svd{Utils::svdDecompose(x, threshold)};
+
+  // Pre-compute data for closed-form solution
   const Eigen::ArrayXd eigenValsSq{svd.singularValues().array().square()};
   const Eigen::ArrayXd utySq{(svd.matrixU().transpose() * y).array().square()};
 
@@ -44,18 +47,18 @@ LambdaCV gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 // Leave-one-out CV
 LambdaCV loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                const Generator& lambdasGrid, const int nThreads,
-               const bool centered) {
-  // Perform SVD on full data once (need thin U for diagonal of Hat matrix)
-  const Eigen::BDCSVD<Eigen::MatrixXd> svd{x, Eigen::ComputeThinU};
-  const Eigen::MatrixXd& u{svd.matrixU()};
+               const double threshold, const bool centered) {
+  // Decompose X with thin U computation
+  const Eigen::BDCSVD<Eigen::MatrixXd> svd{Utils::svdDecompose(x, threshold)};
 
   // Pre-calculate U squared for faster diagonal computation in the policy
+  const Eigen::MatrixXd& u{svd.matrixU()};
   const Eigen::MatrixXd uSq{u.array().square()};
-  const Eigen::VectorXd uty{u.transpose() * y};
+  const Eigen::ArrayXd uty{(u.transpose() * y).array()};
 
   // yNull is the projection of y onto the orthogonal complement of the column
   // space of X (the part of y not explained by the singular vectors)
-  const Eigen::VectorXd yNull{y - (u * uty)};
+  const Eigen::VectorXd yNull{y - (u * uty.matrix())};
   const Eigen::ArrayXd eigenValsSq{svd.singularValues().array().square()};
 
   // Initialize Policy and Worker (LOOCV Policy constructor handles its own
@@ -75,7 +78,8 @@ LambdaCV loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 
 // K fold CV
 LambdaCV kcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
-             const Generator& lambdasGrid, const int seed, const int nThreads) {
+             const Generator& lambdasGrid, const int seed, const int nThreads,
+             const double threshold) {
   // Setup folds
   const Eigen::Index nrow{x.rows()};
   const auto [foldIDs, foldSizes]{
@@ -87,8 +91,9 @@ LambdaCV kcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
   const Eigen::Index maxTrainSize{nrow - minTestSize};
 
   // Initialize Worker
-  Stochastic::Worker worker{
-      y, x, foldIDs, foldSizes, lambdasGrid, maxTrainSize, maxTestSize};
+  Stochastic::Worker worker{y,           x,           foldIDs,
+                            foldSizes,   lambdasGrid, maxTrainSize,
+                            maxTestSize, threshold};
 
   // Compute cross-validation results (parallelize over folds)
   constexpr std::size_t begin{0};

@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
 
+#include <cstdint>
 #include <limits>
 
 #include "CV-OLS-Fit.h"
@@ -15,11 +16,12 @@
 // [[Rcpp::export(name="cv.lm.rcpp")]]
 double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                 const int k0, const double lambda, const bool generalized,
-                const int seed, const int nThreads, const bool centered) {
-  const bool useOLS{lambda == 0.0};  // TO DO: Implement tolerance
+                const int seed, const int nThreads, const double threshold,
+                const bool centered) {
+  const bool useOLS{lambda < threshold};
 
   if (generalized) {
-    return useOLS ? CV::gcv<CV::OLS::Fit>(y, x)
+    return useOLS ? CV::gcv<CV::OLS::Fit>(y, x, threshold)
                   : CV::gcv<CV::Ridge::Fit>(y, x, lambda, centered);
   }
 
@@ -36,12 +38,13 @@ double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 
   // LOOCV
   if (k == nrow) {
-    return useOLS ? CV::loocv<CV::OLS::Fit>(y, x)
+    return useOLS ? CV::loocv<CV::OLS::Fit>(y, x, threshold)
                   : CV::loocv<CV::Ridge::Fit>(y, x, lambda, centered);
   }
 
   // K-fold CV
-  return useOLS ? CV::parCV<CV::OLS::WorkerModel>(y, x, k, seed, nThreads)
+  return useOLS ? CV::parCV<CV::OLS::WorkerModel>(y, x, k, seed, nThreads,
+                                                  threshold)
                 : CV::parCV<CV::Ridge::WorkerModel>(y, x, k, seed, nThreads,
                                                     lambda);
 }
@@ -50,21 +53,25 @@ double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 Rcpp::List gridSearch(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                       const int k0, const double maxLambda,
                       const double precision, const bool generalized,
-                      const int seed, const int nThreads, const bool centered) {
-  // Light weight generator for creating lambda values
-  const Grid::Generator lambdasGrid{maxLambda, precision};
+                      const int seed, const int nThreads,
+                      const double threshold, const bool centered) {
+  // Lightweight generator for creating lambda values
+  const Grid::Generator lambdasGrid{maxLambda, precision, threshold};
 
-  // Limit the grid size
-  if (static_cast<int>(lambdasGrid.size()) > std::numeric_limits<int>::max()) {
-    Rcpp::stop("Lambda grid is too large.");
+  // Limit the grid size (2^32 max)
+  if (static_cast<std::uint32_t>(lambdasGrid.size()) >
+      std::numeric_limits<std::uint32_t>::max()) {
+    Rcpp::stop(
+        "Lambda grid is too large. Please limit search size to something less "
+        "than 2^32.");
   }
 
   // Optimal CV results in the form [CV, lambda]
-  Grid::LambdaCV results{0.0, std::numeric_limits<double>::infinity()};
+  Grid::LambdaCV optimalPair{0.0, std::numeric_limits<double>::infinity()};
 
   // Generalized CV
   if (generalized) {
-    results = Grid::gcv(y, x, lambdasGrid, nThreads, centered);
+    optimalPair = Grid::gcv(y, x, lambdasGrid, nThreads, threshold, centered);
   } else {
     // Determine a valid number of folds as close to the passed argument as
     // possible
@@ -73,12 +80,13 @@ Rcpp::List gridSearch(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
 
     // Leave-one-out CV
     if (const int k{CV::Utils::kCheck(nrow, k0)}; k == nrow) {
-      results = Grid::loocv(y, x, lambdasGrid, nThreads, centered);
+      optimalPair =
+          Grid::loocv(y, x, lambdasGrid, nThreads, threshold, centered);
     } else {  // K-fold CV
-      results = Grid::kcv(y, x, k, lambdasGrid, seed, nThreads);
+      optimalPair = Grid::kcv(y, x, k, lambdasGrid, seed, nThreads, threshold);
     }
   }
 
-  return Rcpp::List::create(Rcpp::Named("CV") = results.cv,
-                            Rcpp::Named("lambda") = results.lambda);
+  return Rcpp::List::create(Rcpp::Named("CV") = optimalPair.cv,
+                            Rcpp::Named("lambda") = optimalPair.lambda);
 }

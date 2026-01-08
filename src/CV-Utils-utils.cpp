@@ -1,5 +1,7 @@
 #include "CV-Utils-utils.h"
 
+#include <Rcpp.h>
+
 #include <algorithm>
 #include <cfenv>
 #include <cmath>

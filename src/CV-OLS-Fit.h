@@ -12,7 +12,8 @@ class Fit {
   Eigen::ArrayXd diagH_{};
 
  public:
-  explicit Fit(Eigen::VectorXd y, const Eigen::MatrixXd& x, bool needHat);
+  explicit Fit(Eigen::VectorXd y, const Eigen::MatrixXd& x, double threshold,
+               bool needHat);
 
   [[nodiscard]] double gcv() const;
   [[nodiscard]] double loocv() const;

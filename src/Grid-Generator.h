@@ -14,7 +14,7 @@ class Generator {
                         // max value
 
  public:
-  explicit Generator(double maxLambda, double precision);
+  explicit Generator(double maxLambda, double precision, double threshold);
 
   [[nodiscard]] Eigen::Index size() const noexcept;
   [[nodiscard]] double operator[](Eigen::Index idx) const;

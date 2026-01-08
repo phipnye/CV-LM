@@ -33,7 +33,7 @@ struct Worker : RcppParallel::Worker {
   Eigen::ArrayXd diagD_;
   Eigen::VectorXi trainIdxs_;
   Eigen::VectorXi testIdxs_;
-  
+
   // Pre-allocate for SVD
   Eigen::BDCSVD<Eigen::MatrixXd> svd_;
 
@@ -42,7 +42,7 @@ struct Worker : RcppParallel::Worker {
                   const Eigen::VectorXi& foldIDs,
                   const Eigen::VectorXi& foldSizes,
                   const Generator& lambdasGrid, Eigen::Index maxTrainSize,
-                  Eigen::Index maxTestSize);
+                  Eigen::Index maxTestSize, double threshold);
 
   // Split ctor
   Worker(const Worker& other, RcppParallel::Split);

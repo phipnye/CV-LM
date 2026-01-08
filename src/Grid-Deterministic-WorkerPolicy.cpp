@@ -36,7 +36,7 @@ namespace LOOCV {
 
 WorkerPolicy::WorkerPolicy(const Eigen::VectorXd& yNull,
                            const Eigen::MatrixXd& u, const Eigen::MatrixXd& uSq,
-                           const Eigen::VectorXd& uty, const Eigen::Index nrow,
+                           const Eigen::ArrayXd& uty, const Eigen::Index nrow,
                            const Eigen::Index eigenValSize)
     : yNull_{yNull},
       u_{u},
@@ -69,13 +69,13 @@ double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
 
   // Add 1/n to account for the unpenalized intercept if the data was centered
   if (centered) {
-    diagH_.array() += (1.0 / static_cast<double>(nrow));
+    diagH_ += (1.0 / static_cast<double>(nrow));
   }
 
   // Calculate Ridge residuals: e = y - y_hat = yNull + U * [(lambda /
   // (eigenVals^2 + lambda)) * U'y]
   resid_ = yNull_;
-  resid_.noalias() += u_ * ((lambda / denom) * uty_.array()).matrix();
+  resid_.noalias() += u_ * ((lambda / denom) * uty_).matrix();
 
   // LOOCV = mean((e_i / (1 - h_ii))^2)
   return (resid_.array() / (1.0 - diagH_)).square().mean();

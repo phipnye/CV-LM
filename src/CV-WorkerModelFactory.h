@@ -11,6 +11,7 @@ namespace OLS {
 struct WorkerModelFactory {
   const Eigen::Index ncol_;
   const Eigen::Index maxTrainSize_;
+  const double threshold_;
 
   [[nodiscard]] WorkerModel operator()() const;
 };

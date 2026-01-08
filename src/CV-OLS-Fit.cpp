@@ -7,8 +7,24 @@
 namespace CV::OLS {
 
 // Ctor
-Fit::Fit(Eigen::VectorXd y, const Eigen::MatrixXd& x, const bool needHat)
-    : qr_{x}, nrow_{x.rows()}, rank_{qr_.rank()}, qty_{std::move(y)} {
+Fit::Fit(Eigen::VectorXd y, const Eigen::MatrixXd& x, const double threshold,
+         const bool needHat)
+    : qr_{[&]() {
+        // Pre-allocate
+        Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(x.rows(), x.cols());
+
+        // Prescribe threshold to QR decomposition where singular values are
+        // considered zero
+        qr.setThreshold(threshold);
+
+        // Perform QR decomposition XP = QR
+        qr.compute(x);
+        return qr;
+      }()},
+      nrow_{x.rows()},
+      rank_{qr_.rank()},
+      qty_{std::move(y)} {
+  // Construct Q'y
   qty_.applyOnTheLeft(qr_.householderQ().transpose());
 
   if (needHat) {
@@ -32,6 +48,8 @@ Fit::Fit(Eigen::VectorXd y, const Eigen::MatrixXd& x, const bool needHat)
 
 // GCV = MSE / (1 - trace(H)/n)^2
 double Fit::gcv() const {
+  // Thought was given to preventing zero-division but decided returning inf is
+  // the most "mathematically" honest answer
   const double mrl{meanResidualLeverage()};
   return mse() / (mrl * mrl);
 }

@@ -9,7 +9,8 @@ namespace OLS {
 struct WorkerModel {
   Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr_;
 
-  explicit WorkerModel(Eigen::Index ncol, Eigen::Index maxTrainSize);
+  explicit WorkerModel(Eigen::Index ncol, Eigen::Index maxTrainSize,
+                       double threshold);
   explicit WorkerModel(const WorkerModel& other);
   WorkerModel(WorkerModel&&) = default;
   WorkerModel& operator=(const WorkerModel&) = delete;

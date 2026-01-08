@@ -6,12 +6,13 @@
 
 namespace Grid {
 
-Generator::Generator(const double maxLambda, const double precision)
+Generator::Generator(const double maxLambda, const double precision,
+                     const double threshold)
     : maxLambda_{maxLambda},
       precision_{precision},
       nFull_{static_cast<Eigen::Index>(std::floor(maxLambda / precision))},
-      hasTail_{(maxLambda - (static_cast<double>(nFull_) * precision)) > 1e-9} {
-}
+      hasTail_{(maxLambda - (static_cast<double>(nFull_) * precision)) >
+               threshold} {}
 
 Eigen::Index Generator::size() const noexcept { return nFull_ + 1 + hasTail_; }
 

@@ -30,7 +30,7 @@ struct WorkerPolicy {
   const Eigen::VectorXd& yNull_;
   const Eigen::MatrixXd& u_;
   const Eigen::MatrixXd& uSq_;
-  const Eigen::VectorXd& uty_;
+  const Eigen::ArrayXd& uty_;
 
   // Thread-specific buffers (mutable for evaluation)
   mutable Eigen::ArrayXd diagS_;
@@ -38,7 +38,7 @@ struct WorkerPolicy {
   mutable Eigen::VectorXd resid_;
 
   WorkerPolicy(const Eigen::VectorXd& yNull, const Eigen::MatrixXd& u,
-               const Eigen::MatrixXd& uSq, const Eigen::VectorXd& uty,
+               const Eigen::MatrixXd& uSq, const Eigen::ArrayXd& uty,
                Eigen::Index nrow, Eigen::Index eigenValSize);
   WorkerPolicy(const WorkerPolicy& other);
   WorkerPolicy(WorkerPolicy&&) = default;
