@@ -56,11 +56,11 @@ test_that("cvLM matches boot::cv.glm for OLS under varied conditions, including 
 
           for (K in Ks) {
             # Loop through the varied formula types
-            for (f_type in names(formulas)) {
-              target_formula <- formulas[[f_type]]
-              cv.boot <- boot.cv.ols(target_formula, dat$df, K, seed)
+            for (f.type in names(formulas)) {
+              target.formula <- formulas[[f.type]]
+              cv.boot <- boot.cv.ols(target.formula, dat$df, K, seed)
               cv.pkg <- cvLM(
-                target_formula,
+                target.formula,
                 data = dat$df,
                 K.vals = K,
                 lambda = 0,
@@ -73,7 +73,7 @@ test_that("cvLM matches boot::cv.glm for OLS under varied conditions, including 
               msg <- paste0(
                 "Mismatch detected!\n",
                 "Scenario: ",
-                f_type,
+                f.type,
                 "\n",
                 "n = ",
                 n,

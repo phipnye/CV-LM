@@ -63,6 +63,7 @@ std::pair<Eigen::VectorXi, Eigen::VectorXi> setupFolds(const int seed,
   // reproducibility)
   const Rcpp::Function setSeed{"set.seed"};
   const Rcpp::Function sampleR{"sample"};
+  // ReSharper disable once CppExpressionWithoutSideEffects
   setSeed(seed);
   const int repeats{static_cast<int>(std::ceil(static_cast<double>(nrow) / k))};
   const Rcpp::IntegerVector seqVec{Rcpp::rep(Rcpp::seq(1, k), repeats)};
@@ -93,6 +94,22 @@ std::pair<Eigen::Index, Eigen::Index> testSizeExtrema(
   return {static_cast<Eigen::Index>(*minIt), static_cast<Eigen::Index>(*maxIt)};
 }
 
+// Split the test and training indices
+void testTrainSplit(const int testID, const Eigen::VectorXi& foldIDs,
+                    Eigen::VectorXi& testIdxs, Eigen::VectorXi& trainIdxs) {
+  const int nrow{static_cast<int>(foldIDs.rows())};
+  Eigen::Index trIdx{0};
+  Eigen::Index tsIdx{0};
+
+  for (int rowIdx{0}; rowIdx < nrow; ++rowIdx) {
+    if (foldIDs[rowIdx] == testID) {
+      testIdxs[tsIdx++] = rowIdx;
+    } else {
+      trainIdxs[trIdx++] = rowIdx;
+    }
+  }
+}
+
 // Check for success of LDLT decomposition
 void checkLdltStatus(const Eigen::ComputationInfo info) {
   if (info == Eigen::Success) {
@@ -108,11 +125,11 @@ void checkLdltStatus(const Eigen::ComputationInfo info) {
           "LDLT failed: Numerical issue (zero pivot). This suggests the matrix "
           "X'X + lambda*I is singular. Try increasing the regularization "
           "lambda or checking for columns with constant values/low variance.");
-      break;
+      // break; - not reachable
 
     default:
       Rcpp::stop("LDLT failed: An unknown error occurred.");
-      break;
+      // break; - not reachable
   }
 }
 

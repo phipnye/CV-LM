@@ -31,7 +31,11 @@ class ScopedRoundingMode {
 [[nodiscard]] std::pair<Eigen::Index, Eigen::Index> testSizeExtrema(
     const Eigen::VectorXi& foldSizes);
 
+// Split the training and test data indicies
+void testTrainSplit(int testID, const Eigen::VectorXi& foldIDs,
+                    Eigen::VectorXi& testIdxs, Eigen::VectorXi& trainIdxs);
+
 // Check for success of LDLT decomposition
-void checkLdltStatus(const Eigen::ComputationInfo info);
+void checkLdltStatus(Eigen::ComputationInfo info);
 
 }  // namespace CV::Utils

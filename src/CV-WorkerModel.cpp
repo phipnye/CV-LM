@@ -9,54 +9,35 @@ namespace OLS {
 WorkerModel::WorkerModel(const Eigen::Index ncol,
                          const Eigen::Index maxTrainSize,
                          const double threshold)
-    : qr_(maxTrainSize, ncol) {
+    : cod_(maxTrainSize, ncol) {
   // Threshold at which to consider singular values zero "A pivot will be
   // considered nonzero if its absolute value is strictly greater than
   // |pivot|⩽threshold×|maxpivot| "
-  qr_.setThreshold(threshold);
+  cod_.setThreshold(threshold);
 }
 
 WorkerModel::WorkerModel(const WorkerModel& other)
-    : info_{other.info_}, qr_(other.qr_.rows(), other.qr_.cols()) {
-  qr_.setThreshold(other.qr_.threshold());
+    : info_{other.info_}, cod_(other.cod_.rows(), other.cod_.cols()) {
+  cod_.setThreshold(other.cod_.threshold());
 }
 
 void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                               const Eigen::Ref<const Eigen::VectorXd>& yTrain,
                               Eigen::VectorXd& beta) {
-  // Decompose training set into the for XP = QR
-  qr_.compute(xTrain);
+  // Decompose training set into the for XP = QTZ
+  cod_.compute(xTrain);
 
-  // if (qr.info() != Eigen::Success) {
-  //   Not necessary, documentation states this always returns success
+  // if (cod_.info() != Eigen::Success) {
+  //   Not necessary, documentation states this always returns success for COD
   // }
 
-  const Eigen::Index rank{qr_.rank()};
-
-  // No rank deficiency
-  if (rank == xTrain.cols()) {
-    beta = qr_.solve(yTrain);
-    return;
-  }
-
-  // Mimic R's behavior of zeroing out coefficients on redundant predictors
-  Eigen::VectorXd qty{
-      yTrain};  // explicitly generate new data in this instance because
-                // ColPivHouseholderQR::solve does not support in-place solving
-                // like LDLT and this is a special case of rank-deficiency
-                // (hopefully rare)
-  qty.applyOnTheLeft(qr_.householderQ().transpose());
-  beta.setZero();
-
-  // Solve Rz = Q'y for the first 'rank' elements using the top-left rank x rank
-  // part of Matrix R
-  beta.head(rank) = qr_.matrixR()
-                        .topLeftCorner(rank, rank)
-                        .triangularView<Eigen::Upper>()
-                        .solve(qty.head(rank));
-
-  // Permute back to original column order
-  beta.applyOnTheLeft(qr_.colsPermutation());
+  // This behavior strays from R's lm behavior when the design matrix is not of
+  // full-column rank, R (as of 2026) uses Dqrdc2/Linpack which zeros out the
+  // last ncol - rank coefficients on the "redundnant" columns of the design
+  // matrix while COD gives the unique minimum norm solution via a second
+  // orthogonal transform XP = QR = QTZ, which allows solving through a
+  // truncated upper triangular matrix T* [rank x rank]
+  beta = cod_.solve(yTrain);
 }
 
 }  // namespace OLS

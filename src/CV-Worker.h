@@ -5,6 +5,8 @@
 
 #include <cstddef>
 
+#include "CV-Utils-utils.h"
+
 namespace CV {
 
 template <typename Model, typename ModelFactory>
@@ -54,7 +56,8 @@ struct Worker : RcppParallel::Worker {
         resid_(maxTestSize),
         trainIdxs_(maxTrainSize),
         testIdxs_(maxTestSize),
-        model_{factory()} {}
+        model_{factory()},
+        info_{Eigen::Success} {}
 
   // Split Ctor
   explicit Worker(const Worker& other, const RcppParallel::Split)
@@ -71,28 +74,20 @@ struct Worker : RcppParallel::Worker {
         resid_(other.resid_.size()),
         trainIdxs_(other.trainIdxs_.size()),
         testIdxs_(other.testIdxs_.size()),
-        model_{other.model_} {}
+        model_{other.model_},
+        info_{Eigen::Success} {}
 
   // parallelReduce requires an operator() to perform the work
   void operator()(const std::size_t begin, const std::size_t end) override {
     // Casting from std::size_t to int is safe here (end is the number of folds
     // which is a signed 32-bit integer from R)
-    for (int foldID{static_cast<int>(begin)}, endID{static_cast<int>(end)};
-         foldID < endID; ++foldID) {
-      const Eigen::Index testSize{foldSizes_[foldID]};
+    for (int testID{static_cast<int>(begin)}, endID{static_cast<int>(end)};
+         testID < endID; ++testID) {
+      const Eigen::Index testSize{foldSizes_[testID]};
       const Eigen::Index trainSize{nrow_ - testSize};
 
-      // Prepare training and testing containers
-      Eigen::Index tr{0};
-      Eigen::Index ts{0};
-
-      for (int row{0}; row < nrow_; ++row) {
-        if (foldIDs_[row] == foldID) {
-          testIdxs_[ts++] = row;
-        } else {
-          trainIdxs_[tr++] = row;
-        }
-      }
+      // Split the test and training indices
+      Utils::testTrainSplit(testID, foldIDs_, testIdxs_, trainIdxs_);
 
       // Copy training data using pre-allocated buffers
       xTrain_.topRows(trainSize) = x_(trainIdxs_.head(trainSize), Eigen::all);

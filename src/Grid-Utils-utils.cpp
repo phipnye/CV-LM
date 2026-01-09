@@ -15,18 +15,18 @@ void checkSvdStatus(const Eigen::ComputationInfo info) {
       Rcpp::stop(
           "SVD failed: Numerical issue encountered (likely NaN or Inf values "
           "in the input matrix).");
-      break;
+      // break; - Unreachable
     case Eigen::NoConvergence:
       Rcpp::stop(
           "SVD failed: Algorithm failed to converge (likely due to extreme "
           "ill-conditioning or disparate scales).");
-      break;
+      // break;
     case Eigen::InvalidInput:
       Rcpp::stop("SVD failed: Invalid input.");
-      break;
+      // break;
     default:
       Rcpp::stop("SVD failed: An unknown error occurred during decomposition.");
-      break;
+      // break;
   }
 }
 

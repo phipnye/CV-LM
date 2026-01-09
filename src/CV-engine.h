@@ -7,6 +7,10 @@
 #include <type_traits>
 #include <utility>
 
+// ReSharper disable once CppUnusedIncludeDirective
+#include "CV-OLS-Fit.h"
+// ReSharper disable once CppUnusedIncludeDirective
+#include "CV-Ridge-Fit.h"
 #include "CV-Utils-utils.h"
 #include "CV-Worker.h"
 #include "CV-WorkerModel.h"
@@ -15,22 +19,22 @@
 namespace CV {
 
 // Generalized cross-validation for linear and ridge regression
-template <typename FitType, typename... Args>
+template <template <bool> class FitType, typename... Args>
 [[nodiscard]] double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                          Args&&... args) {
   constexpr bool needHat{false};  // GCV doesn't need full diagonal entries of
                                   // the hat matrix, just the trace
-  const FitType fit{y, x, std::forward<Args>(args)..., needHat};
+  const FitType<needHat> fit{y, x, std::forward<Args>(args)...};
   return fit.gcv();
 }
 
 // Leave-one-out cross-validation for linear and ridge regression
-template <typename FitType, typename... Args>
+template <template <bool> class FitType, typename... Args>
 [[nodiscard]] double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                            Args&&... args) {
   constexpr bool needHat{
       true};  // LOOCV requires full diagonal entries of the hat matrix
-  const FitType fit{y, x, std::forward<Args>(args)..., needHat};
+  const FitType<needHat> fit{y, x, std::forward<Args>(args)...};
   return fit.loocv();
 }
 
@@ -53,7 +57,7 @@ template <typename WorkerModelType, typename... Args>
   // pre-allocated memory
   const auto factory{[&]() {
     if constexpr (std::is_same_v<WorkerModelType, OLS::WorkerModel>) {
-      // OLS model requires the training size for pre-allocation of QR and a
+      // OLS model requires the training size for pre-allocation of QR/COD and a
       // threshold at which to consider singular values zero
       return OLS::WorkerModelFactory{x.cols(), maxTrainSize,
                                      std::forward<Args>(args)...};

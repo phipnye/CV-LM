@@ -3,6 +3,7 @@
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
+#include "CV-Utils-utils.h"
 #include "Grid-Generator.h"
 
 namespace Grid::Stochastic {
@@ -62,22 +63,13 @@ Worker::Worker(const Worker& other, const RcppParallel::Split)
 void Worker::operator()(const std::size_t begin, const std::size_t end) {
   // Casting from std::size_t to int is safe here (end is the number of folds
   // which is a 32-bit integer from R)
-  for (int foldID{static_cast<int>(begin)}, endID{static_cast<int>(end)};
-       foldID < endID; ++foldID) {
-    const Eigen::Index testSize{foldSizes_[foldID]};
+  for (int testID{static_cast<int>(begin)}, endID{static_cast<int>(end)};
+       testID < endID; ++testID) {
+    const Eigen::Index testSize{foldSizes_[testID]};
     const Eigen::Index trainSize{nrow_ - testSize};
 
-    // Prepare training and testing containers
-    Eigen::Index tr{0};
-    Eigen::Index ts{0};
-
-    for (int row{0}; row < nrow_; ++row) {
-      if (foldIDs_[row] == foldID) {
-        testIdxs_[ts++] = row;
-      } else {
-        trainIdxs_[tr++] = row;
-      }
-    }
+    // Split the test and training indices
+    CV::Utils::testTrainSplit(testID, foldIDs_, testIdxs_, trainIdxs_);
 
     // Perform SVD on training set
     svd_.compute(x_(trainIdxs_.head(trainSize), Eigen::all));
@@ -89,15 +81,14 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
       return;
     }
 
-    const auto& u{svd_.matrixU()};
-    const auto& v{svd_.matrixV()};
-    uty_.noalias() = u.transpose() * y_(trainIdxs_.head(trainSize));
+    const Eigen::MatrixXd& v{svd_.matrixV()};
+    uty_.noalias() =
+        svd_.matrixU().transpose() * y_(trainIdxs_.head(trainSize));
     eigenVals_ = svd_.singularValues();
     eigenValsSq_ = eigenVals_.square();
 
     for (Eigen::Index lambdaIdx{0}, nLambda{lambdasGrid_.size()};
          lambdaIdx < nLambda; ++lambdaIdx) {
-      // TO DO: Handle rank-deficient and 0 shrinkage case
       // diag(D)_i = diag(eigenVal_i / eigenVal_i^2 + lambda)
       diagD_ = eigenVals_ / (eigenValsSq_ + lambdasGrid_[lambdaIdx]);
 

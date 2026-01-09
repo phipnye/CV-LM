@@ -2,6 +2,7 @@
 
 #include <RcppEigen.h>
 
+#include <algorithm>
 #include <cmath>
 
 namespace Grid {
@@ -17,7 +18,7 @@ Generator::Generator(const double maxLambda, const double precision,
 Eigen::Index Generator::size() const noexcept { return nFull_ + 1 + hasTail_; }
 
 double Generator::operator[](const Eigen::Index idx) const {
-  return idx <= nFull_ ? static_cast<double>(idx) * precision_ : maxLambda_;
+  return std::min(static_cast<double>(idx) * precision_, maxLambda_);
 }
 
 }  // namespace Grid

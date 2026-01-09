@@ -2,7 +2,6 @@
 
 #include <RcppEigen.h>
 
-#include <string>
 #include <utility>
 
 #include "CV-Utils-utils.h"

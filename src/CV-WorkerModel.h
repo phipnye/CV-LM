@@ -8,8 +8,9 @@ namespace OLS {
 
 struct WorkerModel {
   Eigen::ComputationInfo info_{
-      Eigen::Success};  // ColPivHouseholderQR::info always returns success
-  Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr_;
+      Eigen::Success};  // CompleteOrthogonalDecomposition::info
+                        // always returns success
+  Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod_;
 
   explicit WorkerModel(Eigen::Index ncol, Eigen::Index maxTrainSize,
                        double threshold);
