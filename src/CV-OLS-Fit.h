@@ -45,9 +45,11 @@ class Fit {
           if constexpr (NeedHat) {
             // Leverage values: h_ii = [X(X'X)^-1 X']_ii
             // Using QR, H = Q_1Q_1' so h_ii = sum_{j=1}^{rank} q_{ij}^2
-            Eigen::MatrixXd qThin{Eigen::MatrixXd::Identity(x.rows(), rank_)};
+            // (rowwise squared norm of thin Q)
+            Eigen::MatrixXd qThin{Eigen::MatrixXd::Identity(nrow_, rank_)};
             qThin.applyOnTheLeft(cod_.householderQ());
-            return qThin.rowwise().squaredNorm().array();
+            Eigen::ArrayXd diagH{qThin.rowwise().squaredNorm().array()};
+            return diagH;
           } else {
             return false;
           }

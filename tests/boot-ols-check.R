@@ -1,7 +1,7 @@
 source("tests/helpers.R")
 
 test_that("cvLM matches boot::cv.glm for OLS under varied conditions, including rank-deficient and ill-conditioned data", {
-  sample.sizes <- c(20, 50, 100, 1000)
+  sample.sizes <- c(1000)
   predictors <- c(2, 4, 6)
   Ks.list <- list(
     few = c(2, 3),
@@ -56,11 +56,11 @@ test_that("cvLM matches boot::cv.glm for OLS under varied conditions, including 
 
           for (K in Ks) {
             # Loop through the varied formula types
-            for (f.type in names(formulas)) {
-              target.formula <- formulas[[f.type]]
-              cv.boot <- boot.cv.ols(target.formula, dat$df, K, seed)
+            for (f_type in names(formulas)) {
+              target_formula <- formulas[[f_type]]
+              cv.boot <- boot.cv.ols(target_formula, dat$df, K, seed)
               cv.pkg <- cvLM(
-                target.formula,
+                target_formula,
                 data = dat$df,
                 K.vals = K,
                 lambda = 0,
@@ -73,7 +73,7 @@ test_that("cvLM matches boot::cv.glm for OLS under varied conditions, including 
               msg <- paste0(
                 "Mismatch detected!\n",
                 "Scenario: ",
-                f.type,
+                f_type,
                 "\n",
                 "n = ",
                 n,

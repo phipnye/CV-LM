@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
 
+// ReSharper disable once CppUnusedIncludeDirective
 #include <cstdint>
 #include <limits>
 
