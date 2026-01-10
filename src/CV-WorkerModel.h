@@ -28,6 +28,9 @@ struct WorkerModel {
 
 namespace Ridge {
 
+// Use primal form
+namespace Narrow {
+
 struct WorkerModel {
   Eigen::ComputationInfo info_;
   const double lambda_;
@@ -44,6 +47,32 @@ struct WorkerModel {
                    const Eigen::Ref<const Eigen::VectorXd>& yTrain,
                    Eigen::VectorXd& beta);
 };
+
+}  // namespace Narrow
+
+namespace Wide {
+
+struct WorkerModel {
+  Eigen::ComputationInfo info_;
+  const double lambda_;
+  Eigen::MatrixXd xxtLambda_;
+  Eigen::LDLT<Eigen::MatrixXd> ldlt_;
+
+  // Additional data buffer for dual coefficients where beta = X' * alpha
+  Eigen::VectorXd alpha_;
+
+  explicit WorkerModel(Eigen::Index maxTrainSize, double lambda);
+  explicit WorkerModel(const WorkerModel& other);
+  WorkerModel(WorkerModel&&) = default;
+  WorkerModel& operator=(const WorkerModel&) = delete;
+  WorkerModel& operator=(WorkerModel&&) = delete;
+
+  void computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
+                   const Eigen::Ref<const Eigen::VectorXd>& yTrain,
+                   Eigen::VectorXd& beta);
+};
+
+}  // namespace Wide
 
 }  // namespace Ridge
 

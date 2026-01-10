@@ -14,8 +14,20 @@ WorkerModel WorkerModelFactory::operator()() const {
 
 namespace Ridge {
 
+namespace Narrow {
+
 WorkerModel WorkerModelFactory::operator()() const {
   return WorkerModel{ncol_, lambda_};
+}
+
+}
+
+namespace Wide {
+
+WorkerModel WorkerModelFactory::operator()() const {
+  return WorkerModel{maxTrainSize_, lambda_};
+}
+
 }
 
 }  // namespace Ridge

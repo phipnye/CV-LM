@@ -1,7 +1,7 @@
 source("tests/helpers.R")
 
 test_that("cvLM matches boot::cv.glm for OLS under varied conditions, including rank-deficient and ill-conditioned data", {
-  sample.sizes <- c(1000)
+  sample.sizes <- c(20, 50, 100, 1000)
   predictors <- c(2, 4, 6)
   Ks.list <- list(
     few = c(2, 3),
@@ -12,7 +12,8 @@ test_that("cvLM matches boot::cv.glm for OLS under varied conditions, including 
 
   for (n in sample.sizes) {
     for (p in predictors) {
-      # TO DO: Need to figure out wide data case
+      # In the case of wide data, R zeroes out coefficients (a general solution) whereas we use complete
+      # orthogonal decomposition which gives the unique minimum norm solution, hence results won't match
       if (p >= n) {
         next
       }

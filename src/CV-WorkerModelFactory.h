@@ -20,12 +20,27 @@ struct WorkerModelFactory {
 
 namespace Ridge {
 
+namespace Narrow {
+
 struct WorkerModelFactory {
   const Eigen::Index ncol_;
   const double lambda_;
 
   [[nodiscard]] WorkerModel operator()() const;
 };
+
+}
+
+namespace Wide {
+
+struct WorkerModelFactory {
+  const Eigen::Index maxTrainSize_;
+  const double lambda_;
+  
+  [[nodiscard]] WorkerModel operator()() const;
+};
+
+}
 
 }  // namespace Ridge
 

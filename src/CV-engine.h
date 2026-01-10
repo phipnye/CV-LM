@@ -22,9 +22,9 @@ namespace CV {
 template <template <bool> typename FitType, typename... Args>
 [[nodiscard]] double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                          Args&&... args) {
-  constexpr bool needHat{false};  // GCV doesn't need full diagonal entries of
+  constexpr bool NeedHat{false};  // GCV doesn't need full diagonal entries of
                                   // the hat matrix, just the trace
-  const FitType<needHat> fit{y, x, std::forward<Args>(args)...};
+  const FitType<NeedHat> fit{y, x, std::forward<Args>(args)...};
   return fit.gcv();
 }
 
@@ -32,9 +32,9 @@ template <template <bool> typename FitType, typename... Args>
 template <template <bool> typename FitType, typename... Args>
 [[nodiscard]] double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                            Args&&... args) {
-  constexpr bool needHat{
+  constexpr bool NeedHat{
       true};  // LOOCV requires full diagonal entries of the hat matrix
-  const FitType<needHat> fit{y, x, std::forward<Args>(args)...};
+  const FitType<NeedHat> fit{y, x, std::forward<Args>(args)...};
   return fit.loocv();
 }
 
@@ -61,10 +61,14 @@ template <typename WorkerModelType, typename... Args>
       // threshold at which to consider singular values zero
       return OLS::WorkerModelFactory{x.cols(), maxTrainSize,
                                      std::forward<Args>(args)...};
-    } else if constexpr (std::is_same_v<WorkerModelType, Ridge::WorkerModel>) {
-      // Ridge model doesn't need train size since we're using cholesky of
+    } else if constexpr (std::is_same_v<WorkerModelType, Ridge::Narrow::WorkerModel>) {
+      // Narrow ridge model doesn't need train size since we're using cholesky of
       // regularized covariance matrix but does need lambda
-      return Ridge::WorkerModelFactory{x.cols(), std::forward<Args>(args)...};
+      return Ridge::Narrow::WorkerModelFactory{x.cols(), std::forward<Args>(args)...};
+    } else if constexpr (std::is_same_v<WorkerModelType, Ridge::Wide::WorkerModel>) {
+      // Wide ridge model requires train size and lambda since we're using cholesky of
+      // regularized gram matrix
+      return Ridge::Wide::WorkerModelFactory{maxTrainSize, std::forward<Args>(args)...};
     } else {
       // Raise a build error if we pass some unexpected configuration
       static_assert(!std::is_same_v<WorkerModelType, WorkerModelType>,

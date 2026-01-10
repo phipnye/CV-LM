@@ -65,14 +65,14 @@ class Fit {
          */
         resid_{[&]() {
           Eigen::VectorXd resid(nrow_);
-          
+
           if (nrow_ < ncol_) {
             resid.noalias() = lambda_ * (inv_ * y);
           } else {
             resid = y;
             resid.noalias() = x * (inv_ * (x.transpose() * y));
           }
-          
+
           return resid;
         }()},
 

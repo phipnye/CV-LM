@@ -44,10 +44,19 @@ double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   }
 
   // K-fold CV
-  return useOLS ? CV::parCV<CV::OLS::WorkerModel>(y, x, k, seed, nThreads,
-                                                  threshold)
-                : CV::parCV<CV::Ridge::WorkerModel>(y, x, k, seed, nThreads,
-                                                    lambda);
+  if (useOLS) {
+    return CV::parCV<CV::OLS::WorkerModel>(y, x, k, seed, nThreads, threshold);
+  } else {
+    // Dispatch based on dimensionality (use dual form only if ncol strictly
+    // exceeds the largest training size)
+    if (x.cols() > (nrow - (nrow / k))) {
+      return CV::parCV<CV::Ridge::Wide::WorkerModel>(y, x, k, seed, nThreads,
+                                                     lambda);
+    } else {
+      return CV::parCV<CV::Ridge::Narrow::WorkerModel>(y, x, k, seed, nThreads,
+                                                       lambda);
+    }
+  }
 }
 
 // [[Rcpp::export(name="grid.search.rcpp")]]

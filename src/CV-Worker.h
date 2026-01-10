@@ -110,8 +110,8 @@ struct Worker : RcppParallel::Worker {
       const double foldMSE{resid_.head(testSize).squaredNorm() / testSize};
 
       // Weighted MSE contribution
-      const double alpha{static_cast<double>(testSize) / nrow_};
-      mse_ += (alpha * foldMSE);
+      const double wt{static_cast<double>(testSize) / nrow_};
+      mse_ += (wt * foldMSE);
     }
   }
 

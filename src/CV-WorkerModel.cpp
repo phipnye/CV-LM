@@ -44,6 +44,9 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
 
 namespace Ridge {
 
+// Use primal form
+namespace Narrow {
+
 WorkerModel::WorkerModel(const Eigen::Index ncol, const double lambda)
     : info_{Eigen::Success},
       lambda_{lambda},
@@ -76,6 +79,7 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
   // perform the decomposition in place here
   ldlt_.compute(xtxLambda_);
 
+  // Make sure decomposition was successful
   if (const Eigen::ComputationInfo info{ldlt_.info()}; info != Eigen::Success) {
     info_ = info;
     return;
@@ -84,6 +88,58 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
   // LDLT::solve supports in-place solves which we use here for efficiency
   ldlt_.solveInPlace(beta);  // just returns true (no need to check)
 }
+
+}  // namespace Narrow
+
+// Use dual form
+
+namespace Wide {
+
+WorkerModel::WorkerModel(const Eigen::Index maxTrainSize, double lambda)
+    : info_{Eigen::Success},
+      lambda_{lambda},
+      xxtLambda_(maxTrainSize, maxTrainSize),
+      ldlt_(maxTrainSize),
+      alpha_(maxTrainSize) {}
+
+WorkerModel::WorkerModel(const WorkerModel& other)
+    : info_{other.info_},
+      lambda_{other.lambda_},
+      xxtLambda_(other.xxtLambda_.rows(), other.xxtLambda_.cols()),
+      ldlt_(other.ldlt_.cols()),
+      alpha_(other.alpha_.size()) {}
+
+void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
+                              const Eigen::Ref<const Eigen::VectorXd>& yTrain,
+                              Eigen::VectorXd& beta) {
+  // Current fold's training size (we are not guaranteed consistent training
+  // sizes across folds)
+  const Eigen::Index trainSize{xTrain.rows()};
+
+  // Generate cross-products (re-use pre-allocated buffers)
+  auto xxtLambdaBlock{xxtLambda_.topLeftCorner(trainSize, trainSize)};
+  xxtLambdaBlock.setZero();
+  xxtLambdaBlock.diagonal().fill(lambda_);
+  xxtLambdaBlock.selfadjointView<Eigen::Lower>().rankUpdate(xTrain);
+
+  // Decompose regularized gram matrix (see above in narrow case for why we use
+  // LDLT over LLT)
+  ldlt_.compute(xxtLambdaBlock);
+
+  // Make sure decomposition was successful
+  if (const Eigen::ComputationInfo info{ldlt_.info()}; info != Eigen::Success) {
+    info_ = info;
+    return;
+  }
+
+  // Solve for dual coefficients alpha: (K + lambda * I) * alpha = y
+  alpha_.head(trainSize) = ldlt_.solve(yTrain);
+
+  // Map back to primal space: beta = X' * alpha
+  beta.noalias() = xTrain.transpose() * alpha_.head(trainSize);
+}
+
+}  // namespace Wide
 
 }  // namespace Ridge
 
