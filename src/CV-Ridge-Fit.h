@@ -64,11 +64,16 @@ class Fit {
         dual:   = lambda * (XX' + lambda * I)^-1 y
          */
         resid_{[&]() {
+          Eigen::VectorXd resid(nrow_);
+          
           if (nrow_ < ncol_) {
-            return lambda_ * (inv_ * y);
+            resid.noalias() = lambda_ * (inv_ * y);
           } else {
-            return y - x * (inv_ * (x.transpose() * y));
+            resid = y;
+            resid.noalias() = x * (inv_ * (x.transpose() * y));
           }
+          
+          return resid;
         }()},
 
         // Diagonal of hat matrix
