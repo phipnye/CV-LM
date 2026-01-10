@@ -9,22 +9,27 @@ namespace CV::OLS {
 
 template <bool NeedHat>
 class Fit {
+  // Eigen objects
   const Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod_;
+  const Eigen::VectorXd qty_;
+
+  // Scalars
   const Eigen::Index nrow_;
   const Eigen::Index rank_;
-  const Eigen::VectorXd qty_;
+
   // Using std::conditional to avoid allocating memory for diagH_ if not needed
   const std::conditional_t<NeedHat, Eigen::ArrayXd, bool> diagH_;
 
  public:
   explicit Fit(Eigen::VectorXd y, const Eigen::MatrixXd& x,
                const double threshold)
+      // Compute complete orthogonal decomposition of x
       : cod_{[&]() {
           // Pre-allocate
           Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(x.rows(),
                                                                       x.cols());
 
-          // Prescribe threshold to QR decomposition where singular values are
+          // Prescribe threshold to decomposition where singular values are
           // considered zero "A pivot will be considered nonzero if its absolute
           // value is strictly greater than |pivot|⩽threshold×|maxpivot| "
           cod.setThreshold(threshold);
@@ -33,14 +38,19 @@ class Fit {
           cod.compute(x);
           return cod;
         }()},
-        nrow_{x.rows()},
-        rank_{cod_.rank()},
+
+        // Construct Q'y
         qty_{[&]() {
-          // Construct Q'y
           Eigen::VectorXd qty{std::move(y)};
           qty.applyOnTheLeft(cod_.householderQ().transpose());
           return qty;
         }()},
+
+        // Scalars
+        nrow_{x.rows()},
+        rank_{cod_.rank()},
+
+        // Diagonal of hat matrix
         diagH_{[&]() {
           if constexpr (NeedHat) {
             // Leverage values: h_ii = [X(X'X)^-1 X']_ii
@@ -54,6 +64,11 @@ class Fit {
             return false;
           }
         }()} {}
+
+  Fit(const Fit&) = delete;
+  Fit(Fit&&) = default;
+  Fit& operator=(const Fit&) = delete;
+  Fit& operator=(Fit&&) = default;
 
   // GCV = MSE / (1 - trace(H)/n)^2
   [[nodiscard]] double gcv() const {

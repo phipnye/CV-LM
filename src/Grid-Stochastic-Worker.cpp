@@ -25,7 +25,7 @@ Worker::Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
       resid_(maxTestSize),
       eigenVals_(x.cols()),
       eigenValsSq_(x.cols()),
-      diagD_(x.cols()),
+      diagW_(x.cols()),
       trainIdxs_(maxTrainSize),
       testIdxs_(maxTestSize),
       svd_(maxTrainSize, x.cols(), Eigen::ComputeThinU | Eigen::ComputeThinV),
@@ -50,7 +50,7 @@ Worker::Worker(const Worker& other, const RcppParallel::Split)
       resid_(other.resid_.size()),
       eigenVals_(other.eigenVals_.size()),
       eigenValsSq_(other.eigenValsSq_.size()),
-      diagD_(other.diagD_.size()),
+      diagW_(other.diagW_.size()),
       trainIdxs_(other.trainIdxs_.size()),
       testIdxs_(other.testIdxs_.size()),
       svd_(other.svd_.rows(), other.svd_.cols(),
@@ -89,11 +89,21 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
 
     for (Eigen::Index lambdaIdx{0}, nLambda{lambdasGrid_.size()};
          lambdaIdx < nLambda; ++lambdaIdx) {
-      // diag(D)_i = diag(eigenVal_i / eigenVal_i^2 + lambda)
-      diagD_ = eigenVals_ / (eigenValsSq_ + lambdasGrid_[lambdaIdx]);
+      // diag(W)_i = diag(eigenVal_i / eigenVal_i^2 + lambda)
+      diagW_ = eigenVals_ / (eigenValsSq_ + lambdasGrid_[lambdaIdx]);
 
-      // beta = V * diagD * U'y
-      beta_.noalias() = v * (diagD_ * uty_.array()).matrix();
+      /*
+       beta = (X'X + lambda * I)^-1 X'y
+       (V D^2 V' + lambda * I) * beta = VDU'y
+       beta = V * alpha
+       (V D^2 V' + lambda * I) V * alpha = VDU'y
+       V D^2 V'V * alpha + lambda * V * alpha = VDU'y
+       V (D^2 + lambda * I) alpha = VDU'y
+       (D^2 + lambda * I) alpha = DU'y
+       alpha = (D^2 + lambda * I)^-1 DU'y
+       beta = V * alpha = V * [(D^2 + lambda * I)^-1 D] * U'y
+       */
+      beta_.noalias() = v * (diagW_ * uty_.array()).matrix();
 
       // Evaluate performance on hold-out fold (MSE)
       resid_.head(testSize) = y_(testIdxs_.head(testSize));

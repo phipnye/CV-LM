@@ -12,18 +12,15 @@
 
 namespace Grid::Deterministic {
 
-// Base class for searching grid of deterministic CV (LOOCV and GCV) results
+// Class for searching grid of deterministic CV (LOOCV and GCV) results
 template <typename WorkerPolicy>
 struct Worker : RcppParallel::Worker {
   // References
   const Generator& lambdasGrid_;
   const Eigen::ArrayXd& eigenValsSq_;
 
-  // Sizes
+  // Scalars
   const Eigen::Index nrow_;
-
-  // Boolean flags
-  const bool centered_;
 
   // Thread-local buffer for repeated denominator computations
   Eigen::ArrayXd denom_;
@@ -34,6 +31,9 @@ struct Worker : RcppParallel::Worker {
   // Policy (owns all calculation-specific data)
   WorkerPolicy policy_;
 
+  // Flag for whether data was centered in R
+  const bool centered_;
+
   // Main ctor
   explicit Worker(const Generator& lambdasGrid,
                   const Eigen::ArrayXd& eigenValsSq, const Eigen::Index nrow,
@@ -41,22 +41,22 @@ struct Worker : RcppParallel::Worker {
       : lambdasGrid_{lambdasGrid},
         eigenValsSq_{eigenValsSq},
         nrow_{nrow},
-        centered_{centered},
         denom_(eigenValsSq.size()),
-        // [lambda, CV]
+        // [lambda, CV] - no designated initializer in C++17
         results_{0.0, std::numeric_limits<double>::infinity()},
-        policy_{std::move(policy)} {}
+        policy_{std::move(policy)},
+        centered_{centered} {}
 
   // Split ctor
   explicit Worker(const Worker& other, const RcppParallel::Split)
       : lambdasGrid_{other.lambdasGrid_},
         eigenValsSq_{other.eigenValsSq_},
         nrow_{other.nrow_},
-        centered_{other.centered_},
         denom_(other.denom_.size()),
         // [lambda, CV]
         results_{0.0, std::numeric_limits<double>::infinity()},
-        policy_{other.policy_} {}
+        policy_{other.policy_},
+        centered_{other.centered_} {}
 
   // parallelReduce work operator
   void operator()(const std::size_t begin, const std::size_t end) override {

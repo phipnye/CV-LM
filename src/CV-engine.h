@@ -19,7 +19,7 @@
 namespace CV {
 
 // Generalized cross-validation for linear and ridge regression
-template <template <bool> class FitType, typename... Args>
+template <template <bool> typename FitType, typename... Args>
 [[nodiscard]] double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                          Args&&... args) {
   constexpr bool needHat{false};  // GCV doesn't need full diagonal entries of
@@ -29,7 +29,7 @@ template <template <bool> class FitType, typename... Args>
 }
 
 // Leave-one-out cross-validation for linear and ridge regression
-template <template <bool> class FitType, typename... Args>
+template <template <bool> typename FitType, typename... Args>
 [[nodiscard]] double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                            Args&&... args) {
   constexpr bool needHat{

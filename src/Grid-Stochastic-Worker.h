@@ -30,7 +30,7 @@ struct Worker : RcppParallel::Worker {
   Eigen::VectorXd resid_;
   Eigen::ArrayXd eigenVals_;
   Eigen::ArrayXd eigenValsSq_;
-  Eigen::ArrayXd diagD_;
+  Eigen::ArrayXd diagW_;
   Eigen::VectorXi trainIdxs_;
   Eigen::VectorXi testIdxs_;
 
