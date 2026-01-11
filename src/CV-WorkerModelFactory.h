@@ -29,18 +29,18 @@ struct WorkerModelFactory {
   [[nodiscard]] WorkerModel operator()() const;
 };
 
-}
+}  // namespace Narrow
 
 namespace Wide {
 
 struct WorkerModelFactory {
   const Eigen::Index maxTrainSize_;
   const double lambda_;
-  
+
   [[nodiscard]] WorkerModel operator()() const;
 };
 
-}
+}  // namespace Wide
 
 }  // namespace Ridge
 

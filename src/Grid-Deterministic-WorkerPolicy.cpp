@@ -11,7 +11,7 @@ double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
                               const Eigen::ArrayXd& eigenValsSq,
                               const Eigen::Index nrow,
                               const bool centered) const {
-  // trace(H) = sum(eigenVals^2 / (eigenVals^2 + lambda))
+  // trace(H) = sum(eigenVals^2 / (eigenVals^2 + lambda)) [ESL p. 68]
   double traceH{(eigenValsSq / denom).sum()};
 
   // Add 1 for the unpenalized intercept if data was centered
@@ -24,7 +24,7 @@ double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
   const double rss{rssNull_ +
                    ((lambda * lambda) * utySq_ / denom.square()).sum()};
 
-  // GCV = MSE / (1 - trance(H) / n)^2
+  // GCV = MSE / (1 - trace(H) / n)^2
   const double meanResidLeverage{1.0 - traceH / static_cast<double>(nrow)};
   return rss /
          (static_cast<double>(nrow) * meanResidLeverage * meanResidLeverage);

@@ -12,10 +12,10 @@ namespace CV {
 template <typename Model, typename ModelFactory>
 struct Worker : RcppParallel::Worker {
   // References
-  const Eigen::VectorXd& y_;
-  const Eigen::MatrixXd& x_;
-  const Eigen::VectorXi& foldIDs_;
-  const Eigen::VectorXi& foldSizes_;
+  const Eigen::Map<Eigen::VectorXd>& y_;
+  const Eigen::Map<Eigen::MatrixXd>& x_;
+  const Eigen::VectorXi& testFoldIDs_;
+  const Eigen::VectorXi& testFoldSizes_;
 
   // Sizes
   const Eigen::Index nrow_;
@@ -38,15 +38,16 @@ struct Worker : RcppParallel::Worker {
       info_;  // whether cholesky decomposition was successful
 
   // Main Ctor
-  explicit Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                  const Eigen::VectorXi& foldIDs,
-                  const Eigen::VectorXi& foldSizes,
+  explicit Worker(const Eigen::Map<Eigen::VectorXd>& y,
+                  const Eigen::Map<Eigen::MatrixXd>& x,
+                  const Eigen::VectorXi& testFoldIDs,
+                  const Eigen::VectorXi& testFoldSizes,
                   const Eigen::Index maxTrainSize,
                   const Eigen::Index maxTestSize, const ModelFactory& factory)
       : y_{y},
         x_{x},
-        foldIDs_{foldIDs},
-        foldSizes_{foldSizes},
+        testFoldIDs_{testFoldIDs},
+        testFoldSizes_{testFoldSizes},
         nrow_{x.rows()},
         ncol_{x.cols()},
         mse_{0.0},
@@ -63,8 +64,8 @@ struct Worker : RcppParallel::Worker {
   explicit Worker(const Worker& other, const RcppParallel::Split)
       : y_{other.y_},
         x_{other.x_},
-        foldIDs_{other.foldIDs_},
-        foldSizes_{other.foldSizes_},
+        testFoldIDs_{other.testFoldIDs_},
+        testFoldSizes_{other.testFoldSizes_},
         nrow_{other.nrow_},
         ncol_{other.ncol_},
         mse_{0.0},
@@ -83,11 +84,11 @@ struct Worker : RcppParallel::Worker {
     // which is a signed 32-bit integer from R)
     for (int testID{static_cast<int>(begin)}, endID{static_cast<int>(end)};
          testID < endID; ++testID) {
-      const Eigen::Index testSize{foldSizes_[testID]};
+      const Eigen::Index testSize{testFoldSizes_[testID]};
       const Eigen::Index trainSize{nrow_ - testSize};
 
       // Split the test and training indices
-      Utils::testTrainSplit(testID, foldIDs_, testIdxs_, trainIdxs_);
+      Utils::testTrainSplit(testID, testFoldIDs_, testIdxs_, trainIdxs_);
 
       // Copy training data using pre-allocated buffers
       xTrain_.topRows(trainSize) = x_(trainIdxs_.head(trainSize), Eigen::all);
@@ -107,11 +108,11 @@ struct Worker : RcppParallel::Worker {
       resid_.head(testSize) = y_(testIdxs_.head(testSize));
       resid_.head(testSize).noalias() -=
           (x_(testIdxs_.head(testSize), Eigen::all) * beta_);
-      const double foldMSE{resid_.head(testSize).squaredNorm() / testSize};
+      const double testMSE{resid_.head(testSize).squaredNorm() / testSize};
 
       // Weighted MSE contribution
       const double wt{static_cast<double>(testSize) / nrow_};
-      mse_ += (wt * foldMSE);
+      mse_ += (wt * testMSE);
     }
   }
 

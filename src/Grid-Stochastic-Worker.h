@@ -12,10 +12,10 @@ namespace Grid::Stochastic {
 
 struct Worker : RcppParallel::Worker {
   // References
-  const Eigen::VectorXd& y_;
-  const Eigen::MatrixXd& x_;
-  const Eigen::VectorXi& foldIDs_;
-  const Eigen::VectorXi& foldSizes_;
+  const Eigen::Map<Eigen::VectorXd>& y_;
+  const Eigen::Map<Eigen::MatrixXd>& x_;
+  const Eigen::VectorXi& testFoldIDs_;
+  const Eigen::VectorXi& testFoldSizes_;
   const Generator& lambdasGrid_;
 
   // Sizes
@@ -37,13 +37,14 @@ struct Worker : RcppParallel::Worker {
   // Pre-allocate for SVD
   Eigen::BDCSVD<Eigen::MatrixXd> svd_;
 
-  // Flag indicating success of decompositions
+  // Enum indicating success of decompositions
   Eigen::ComputationInfo info_;
 
   // Ctor
-  explicit Worker(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                  const Eigen::VectorXi& foldIDs,
-                  const Eigen::VectorXi& foldSizes,
+  explicit Worker(const Eigen::Map<Eigen::VectorXd>& y,
+                  const Eigen::Map<Eigen::MatrixXd>& x,
+                  const Eigen::VectorXi& testFoldIDs,
+                  const Eigen::VectorXi& testFoldSizes,
                   const Generator& lambdasGrid, Eigen::Index maxTrainSize,
                   Eigen::Index maxTestSize, double threshold);
 
@@ -56,6 +57,10 @@ struct Worker : RcppParallel::Worker {
   // parallelReduce uses join to compose the operations of two worker instances
   // that were previously split
   void join(const Worker& other);
+
+  // Evalutate out-of-sample performance
+  void evalTestMSE(Eigen::Index lambdaIdx, Eigen::Index testSize,
+                   const Eigen::MatrixXd& v, double wt);
 };
 
 };  // namespace Grid::Stochastic

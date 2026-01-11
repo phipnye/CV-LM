@@ -22,17 +22,17 @@ class ScopedRoundingMode {
 // Confirm valid value for K
 [[nodiscard]] int kCheck(int nrow, int k0);
 
-// Generates fold assignments
+// Generates test fold assignments
 [[nodiscard]] std::pair<Eigen::VectorXi, Eigen::VectorXi> setupFolds(int seed,
                                                                      int nrow,
                                                                      int k);
 
 // Determine the min and max test fold sizes
 [[nodiscard]] std::pair<Eigen::Index, Eigen::Index> testSizeExtrema(
-    const Eigen::VectorXi& foldSizes);
+    const Eigen::VectorXi& testFoldSizes);
 
 // Split the training and test data indicies
-void testTrainSplit(int testID, const Eigen::VectorXi& foldIDs,
+void testTrainSplit(int testID, const Eigen::VectorXi& testFoldIDs,
                     Eigen::VectorXi& testIdxs, Eigen::VectorXi& trainIdxs);
 
 // Check for success of LDLT decomposition

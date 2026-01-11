@@ -95,7 +95,7 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
 
 namespace Wide {
 
-WorkerModel::WorkerModel(const Eigen::Index maxTrainSize, double lambda)
+WorkerModel::WorkerModel(const Eigen::Index maxTrainSize, const double lambda)
     : info_{Eigen::Success},
       lambda_{lambda},
       xxtLambda_(maxTrainSize, maxTrainSize),

@@ -24,8 +24,9 @@ class Fit {
   const bool centered_;
 
  public:
-  explicit Fit(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-               const double lambda, const bool centered)
+  explicit Fit(const Eigen::Map<Eigen::VectorXd>& y,
+               const Eigen::Map<Eigen::MatrixXd>& x, const double lambda,
+               const bool centered)
       : nrow_{x.rows()},
         ncol_{x.cols()},
         lambda_{lambda},
@@ -153,11 +154,11 @@ class Fit {
       // Using trace(AB) = trace(BA) and XX' = (XX' + lambda * I) - lambda * I
       // trace(H) = n - lambda * trace((XX' + lambda * I)^-1)
       return static_cast<double>(nrow_) + correction - lambda_ * inv_.trace();
-    } else {
-      // Using trace(AB) = trace(BA) and X'X = (X'X + lambda * I) - lambda * I
-      // trace(H) = p - lambda * trace((X'X + lambda * I)^-1)
-      return static_cast<double>(ncol_) + correction - lambda_ * inv_.trace();
     }
+
+    // Using trace(AB) = trace(BA) and X'X = (X'X + lambda * I) - lambda * I
+    // trace(H) = p - lambda * trace((X'X + lambda * I)^-1)
+    return static_cast<double>(ncol_) + correction - lambda_ * inv_.trace();
   }
 };
 

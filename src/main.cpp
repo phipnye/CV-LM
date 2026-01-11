@@ -1,8 +1,6 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
 
-// ReSharper disable once CppUnusedIncludeDirective
-#include <cstdint>
 #include <limits>
 
 #include "CV-OLS-Fit.h"
@@ -15,11 +13,12 @@
 #include "Grid-engine.h"
 
 // [[Rcpp::export(name="cv.lm.rcpp")]]
-double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                const int k0, const double lambda, const bool generalized,
-                const int seed, const int nThreads, const double threshold,
+double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y,
+                const Eigen::Map<Eigen::MatrixXd> x, const int k0,
+                const double lambda, const bool generalized, const int seed,
+                const int nThreads, const double threshold,
                 const bool centered) {
-  const bool useOLS{lambda < threshold};
+  const bool useOLS{lambda <= threshold};
 
   if (generalized) {
     return useOLS ? CV::gcv<CV::OLS::Fit>(y, x, threshold)
@@ -46,31 +45,32 @@ double cvLMRCpp(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
   // K-fold CV
   if (useOLS) {
     return CV::parCV<CV::OLS::WorkerModel>(y, x, k, seed, nThreads, threshold);
-  } else {
-    // Dispatch based on dimensionality (use dual form only if ncol strictly
-    // exceeds the largest training size)
-    if (x.cols() > (nrow - (nrow / k))) {
-      return CV::parCV<CV::Ridge::Wide::WorkerModel>(y, x, k, seed, nThreads,
-                                                     lambda);
-    } else {
-      return CV::parCV<CV::Ridge::Narrow::WorkerModel>(y, x, k, seed, nThreads,
-                                                       lambda);
-    }
   }
+
+  // Dispatch based on dimensionality (use dual form only if ncol strictly
+  // exceeds the largest training size)
+  if (x.cols() > (nrow - (nrow / k))) {
+    return CV::parCV<CV::Ridge::Wide::WorkerModel>(y, x, k, seed, nThreads,
+                                                   lambda);
+  }
+
+  // Otherwise, use primal form
+  return CV::parCV<CV::Ridge::Narrow::WorkerModel>(y, x, k, seed, nThreads,
+                                                   lambda);
 }
 
 // [[Rcpp::export(name="grid.search.rcpp")]]
-Rcpp::List gridSearch(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                      const int k0, const double maxLambda,
-                      const double precision, const bool generalized,
-                      const int seed, const int nThreads,
-                      const double threshold, const bool centered) {
+Rcpp::List gridSearch(const Eigen::Map<Eigen::VectorXd> y,
+                      const Eigen::Map<Eigen::MatrixXd> x, const int k0,
+                      const double maxLambda, const double precision,
+                      const bool generalized, const int seed,
+                      const int nThreads, const double threshold,
+                      const bool centered) {
   // Lightweight generator for creating lambda values
   const Grid::Generator lambdasGrid{maxLambda, precision, threshold};
 
   // Limit the grid size (2^32 max)
-  if (static_cast<std::uint32_t>(lambdasGrid.size()) >
-      std::numeric_limits<std::uint32_t>::max()) {
+  if (lambdasGrid.size() > (1LL << 32)) {
     Rcpp::stop(
         "Lambda grid is too large. Please limit search size to something less "
         "than 2^32.");

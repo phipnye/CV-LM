@@ -8,6 +8,6 @@ namespace Grid::Utils {
 void checkSvdStatus(Eigen::ComputationInfo info);
 
 [[nodiscard]] Eigen::BDCSVD<Eigen::MatrixXd> svdDecompose(
-    const Eigen::MatrixXd& x, double threshold);
+    const Eigen::Map<Eigen::MatrixXd>& x, double threshold);
 
 }  // namespace Grid::Utils

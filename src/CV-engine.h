@@ -15,13 +15,14 @@
 #include "CV-Worker.h"
 #include "CV-WorkerModel.h"
 #include "CV-WorkerModelFactory.h"
+#include "Constants.h"
 
 namespace CV {
 
 // Generalized cross-validation for linear and ridge regression
 template <template <bool> typename FitType, typename... Args>
-[[nodiscard]] double gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                         Args&&... args) {
+[[nodiscard]] double gcv(const Eigen::Map<Eigen::VectorXd>& y,
+                         const Eigen::Map<Eigen::MatrixXd>& x, Args&&... args) {
   constexpr bool NeedHat{false};  // GCV doesn't need full diagonal entries of
                                   // the hat matrix, just the trace
   const FitType<NeedHat> fit{y, x, std::forward<Args>(args)...};
@@ -30,7 +31,8 @@ template <template <bool> typename FitType, typename... Args>
 
 // Leave-one-out cross-validation for linear and ridge regression
 template <template <bool> typename FitType, typename... Args>
-[[nodiscard]] double loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+[[nodiscard]] double loocv(const Eigen::Map<Eigen::VectorXd>& y,
+                           const Eigen::Map<Eigen::MatrixXd>& x,
                            Args&&... args) {
   constexpr bool NeedHat{
       true};  // LOOCV requires full diagonal entries of the hat matrix
@@ -40,17 +42,17 @@ template <template <bool> typename FitType, typename... Args>
 
 // Multi-threaded CV for linear and ridge regression
 template <typename WorkerModelType, typename... Args>
-[[nodiscard]] double parCV(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-                           const int k, const int seed, const int nThreads,
-                           Args&&... args) {
+[[nodiscard]] double parCV(const Eigen::Map<Eigen::VectorXd>& y,
+                           const Eigen::Map<Eigen::MatrixXd>& x, const int k,
+                           const int seed, const int nThreads, Args&&... args) {
   // Setup folds
   const Eigen::Index nrow{x.rows()};
-  const auto [foldIDs,
-              foldSizes]{Utils::setupFolds(seed, static_cast<int>(nrow), k)};
+  const auto [testFoldIDs, testFoldSizes]{
+      Utils::setupFolds(seed, static_cast<int>(nrow), k)};
 
   // Pre-calculate fold size bounds (this allows us to allocate data buffers of
   // appropriate size in our worker instances)
-  const auto [minTestSize, maxTestSize]{Utils::testSizeExtrema(foldSizes)};
+  const auto [minTestSize, maxTestSize]{Utils::testSizeExtrema(testFoldSizes)};
   const Eigen::Index maxTrainSize{nrow - minTestSize};
 
   // Generate a WorkerModelFactory for generating worker models with
@@ -61,14 +63,18 @@ template <typename WorkerModelType, typename... Args>
       // threshold at which to consider singular values zero
       return OLS::WorkerModelFactory{x.cols(), maxTrainSize,
                                      std::forward<Args>(args)...};
-    } else if constexpr (std::is_same_v<WorkerModelType, Ridge::Narrow::WorkerModel>) {
-      // Narrow ridge model doesn't need train size since we're using cholesky of
-      // regularized covariance matrix but does need lambda
-      return Ridge::Narrow::WorkerModelFactory{x.cols(), std::forward<Args>(args)...};
-    } else if constexpr (std::is_same_v<WorkerModelType, Ridge::Wide::WorkerModel>) {
-      // Wide ridge model requires train size and lambda since we're using cholesky of
-      // regularized gram matrix
-      return Ridge::Wide::WorkerModelFactory{maxTrainSize, std::forward<Args>(args)...};
+    } else if constexpr (std::is_same_v<WorkerModelType,
+                                        Ridge::Narrow::WorkerModel>) {
+      // Narrow ridge model doesn't need train size since we're using cholesky
+      // of regularized covariance matrix
+      return Ridge::Narrow::WorkerModelFactory{x.cols(),
+                                               std::forward<Args>(args)...};
+    } else if constexpr (std::is_same_v<WorkerModelType,
+                                        Ridge::Wide::WorkerModel>) {
+      // Wide ridge model requires train size and lambda since we're using
+      // cholesky of regularized gram matrix
+      return Ridge::Wide::WorkerModelFactory{maxTrainSize,
+                                             std::forward<Args>(args)...};
     } else {
       // Raise a build error if we pass some unexpected configuration
       static_assert(!std::is_same_v<WorkerModelType, WorkerModelType>,
@@ -80,13 +86,12 @@ template <typename WorkerModelType, typename... Args>
   // model with pre-allocated memory for the decomposition and coefficient
   // computation
   Worker<WorkerModelType, decltype(factory)> worker{
-      y, x, foldIDs, foldSizes, maxTrainSize, maxTestSize, factory};
+      y, x, testFoldIDs, testFoldSizes, maxTrainSize, maxTestSize, factory};
 
   // Compute CV result
-  constexpr std::size_t begin{0};
   const std::size_t end{static_cast<std::size_t>(k)};
-  constexpr std::size_t grainSize{1};
-  RcppParallel::parallelReduce(begin, end, worker, grainSize, nThreads);
+  RcppParallel::parallelReduce(Constants::begin, end, worker,
+                               Constants::grainSize, nThreads);
   return worker.mse_;
 }
 

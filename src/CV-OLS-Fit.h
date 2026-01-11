@@ -21,21 +21,20 @@ class Fit {
   const std::conditional_t<NeedHat, Eigen::ArrayXd, bool> diagH_;
 
  public:
-  explicit Fit(Eigen::VectorXd y, const Eigen::MatrixXd& x,
+  explicit Fit(Eigen::VectorXd y, const Eigen::Map<Eigen::MatrixXd>& x,
                const double threshold)
       // Compute complete orthogonal decomposition of x
       : cod_{[&]() {
-          // Pre-allocate
-          Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(x.rows(),
-                                                                      x.cols());
+          // Perform QR/Complete orthogonal decomposition XP = QTZ
+          Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod{x};
 
           // Prescribe threshold to decomposition where singular values are
           // considered zero "A pivot will be considered nonzero if its absolute
-          // value is strictly greater than |pivot|⩽threshold×|maxpivot| "
+          // value is strictly greater than |pivot|⩽threshold×|maxpivot| " -
+          // this threshold only affects other methods like solve and rank, not
+          // the decomposition itself
           cod.setThreshold(threshold);
 
-          // Perform QR/Complete orthogonal decomposition XP = QTZ
-          cod.compute(x);
           return cod;
         }()},
 

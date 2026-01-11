@@ -20,7 +20,7 @@ WorkerModel WorkerModelFactory::operator()() const {
   return WorkerModel{ncol_, lambda_};
 }
 
-}
+}  // namespace Narrow
 
 namespace Wide {
 
@@ -28,7 +28,7 @@ WorkerModel WorkerModelFactory::operator()() const {
   return WorkerModel{maxTrainSize_, lambda_};
 }
 
-}
+}  // namespace Wide
 
 }  // namespace Ridge
 

@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "CV-Utils-utils.h"
+#include "Constants.h"
 #include "Grid-Deterministic-Worker.h"
 #include "Grid-Deterministic-WorkerPolicy.h"
 #include "Grid-Generator.h"
@@ -15,9 +16,9 @@
 namespace Grid {
 
 // Generalized CV
-LambdaCV gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
-             const Generator& lambdasGrid, const int nThreads,
-             const double threshold, const bool centered) {
+LambdaCV gcv(const Eigen::Map<Eigen::VectorXd>& y,
+             const Eigen::Map<Eigen::MatrixXd>& x, const Generator& lambdasGrid,
+             const int nThreads, const double threshold, const bool centered) {
   // Decompose X with thin U computation
   const Eigen::BDCSVD<Eigen::MatrixXd> svd{Utils::svdDecompose(x, threshold)};
 
@@ -36,15 +37,15 @@ LambdaCV gcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                                              centered, policy};
 
   // Parallelize over the grid of Lambdas
-  constexpr std::size_t begin{0};
   const std::size_t end{static_cast<std::size_t>(lambdasGrid.size())};
-  constexpr std::size_t grainSize{1};
-  RcppParallel::parallelReduce(begin, end, worker, grainSize, nThreads);
+  RcppParallel::parallelReduce(Constants::begin, end, worker,
+                               Constants::grainSize, nThreads);
   return worker.results_;
 }
 
 // Leave-one-out CV
-LambdaCV loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
+LambdaCV loocv(const Eigen::Map<Eigen::VectorXd>& y,
+               const Eigen::Map<Eigen::MatrixXd>& x,
                const Generator& lambdasGrid, const int nThreads,
                const double threshold, const bool centered) {
   // Decompose X with thin U computation
@@ -68,37 +69,38 @@ LambdaCV loocv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x,
                                              centered, std::move(policy)};
 
   // Parallelize over the grid of Lambdas
-  constexpr std::size_t begin{0};
   const std::size_t end{static_cast<std::size_t>(lambdasGrid.size())};
-  constexpr std::size_t grainSize{1};
-  RcppParallel::parallelReduce(begin, end, worker, grainSize, nThreads);
+  RcppParallel::parallelReduce(Constants::begin, end, worker,
+                               Constants::grainSize, nThreads);
   return worker.results_;
 }
 
 // K fold CV
-LambdaCV kcv(const Eigen::VectorXd& y, const Eigen::MatrixXd& x, const int k,
+LambdaCV kcv(const Eigen::Map<Eigen::VectorXd>& y,
+             const Eigen::Map<Eigen::MatrixXd>& x, const int k,
              const Generator& lambdasGrid, const int seed, const int nThreads,
              const double threshold) {
   // Setup folds
   const Eigen::Index nrow{x.rows()};
-  const auto [foldIDs, foldSizes]{
+  const auto [testFoldIDs, testFoldSizes]{
       CV::Utils::setupFolds(seed, static_cast<int>(nrow), k)};
 
   // Pre-calculate fold size bounds (this allows us to allocate data buffers of
   // appropriate size in our worker instances)
-  const auto [minTestSize, maxTestSize]{CV::Utils::testSizeExtrema(foldSizes)};
+  const auto [minTestSize,
+              maxTestSize]{CV::Utils::testSizeExtrema(testFoldSizes)};
   const Eigen::Index maxTrainSize{nrow - minTestSize};
 
   // Initialize Worker
-  Stochastic::Worker worker{y,           x,           foldIDs,
-                            foldSizes,   lambdasGrid, maxTrainSize,
+  Stochastic::Worker worker{y,           x,
+                            testFoldIDs, testFoldSizes,
+                            lambdasGrid, maxTrainSize,
                             maxTestSize, threshold};
 
   // Compute cross-validation results (parallelize over folds)
-  constexpr std::size_t begin{0};
   const std::size_t end{static_cast<std::size_t>(k)};
-  constexpr std::size_t grainSize{1};
-  RcppParallel::parallelReduce(begin, end, worker, grainSize, nThreads);
+  RcppParallel::parallelReduce(Constants::begin, end, worker,
+                               Constants::grainSize, nThreads);
 
   // Make sure SVD worked consistently
   Utils::checkSvdStatus(worker.info_);

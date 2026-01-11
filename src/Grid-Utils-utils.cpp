@@ -30,19 +30,17 @@ void checkSvdStatus(const Eigen::ComputationInfo info) {
   }
 }
 
-Eigen::BDCSVD<Eigen::MatrixXd> svdDecompose(const Eigen::MatrixXd& x,
-                                            const double threshold) {
-  // Pre-allocate memory for SVD
-  Eigen::BDCSVD<Eigen::MatrixXd> svd(x.rows(), x.cols(), Eigen::ComputeThinU);
+Eigen::BDCSVD<Eigen::MatrixXd> svdDecompose(
+    const Eigen::Map<Eigen::MatrixXd>& x, const double threshold) {
+  // Perform SVD on full data once (for GCV, we only need singular values and
+  // U'y)
+  Eigen::BDCSVD<Eigen::MatrixXd> svd{x, Eigen::ComputeThinU};
 
   // Set threshold at which signular values are considered zero "A singular
   // value will be considered nonzero if its value is strictly greater than
-  // |singularvalue|⩽threshold×|maxsingularvalue|."
+  // |singularvalue|⩽threshold×|maxsingularvalue|." - this threshold only
+  // affects other methods like solve and rank, not the decomposition itself
   svd.setThreshold(threshold);
-
-  // Perform SVD on full data once (for GCV, we only need singular values and
-  // U'y)
-  svd.compute(x);
 
   // Confirm successful decomposition
   checkSvdStatus(svd.info());

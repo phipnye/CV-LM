@@ -54,7 +54,7 @@ int kCheck(const int nrow, const int k0) {
   return closestK;
 }
 
-// Generates fold assignments
+// Generates test fold assignments
 std::pair<Eigen::VectorXi, Eigen::VectorXi> setupFolds(const int seed,
                                                        const int nrow,
                                                        const int k) {
@@ -68,41 +68,41 @@ std::pair<Eigen::VectorXi, Eigen::VectorXi> setupFolds(const int seed,
   const int repeats{static_cast<int>(std::ceil(static_cast<double>(nrow) / k))};
   const Rcpp::IntegerVector seqVec{Rcpp::rep(Rcpp::seq(1, k), repeats)};
   const Rcpp::IntegerVector sampled{sampleR(seqVec, nrow)};
-  Eigen::VectorXi foldIDs{Rcpp::as<Eigen::VectorXi>(sampled)};
+  Eigen::VectorXi testFoldIDs{Rcpp::as<Eigen::VectorXi>(sampled)};
 
   // R's internal documentation states the number of rows for a matrix are
   // limited to 32-bit values so VectorXi is safe here
-  Eigen::VectorXi foldSizes{Eigen::VectorXi::Zero(k)};
+  Eigen::VectorXi testFoldSizes{Eigen::VectorXi::Zero(k)};
 
-  // Convert foldIDs to be zero-indexed
-  foldIDs.array() -= 1;
+  // Convert testFoldIDs to be zero-indexed
+  testFoldIDs.array() -= 1;
 
-  // Store fold sizes to calculate the weighted CV estimate: sum((n_i / n) *
-  // cost_i)
-  for (Eigen::Index idx{0}, size{foldIDs.size()}; idx < size; ++idx) {
-    ++foldSizes[foldIDs[idx]];
+  // Store test fold sizes to calculate the weighted CV estimate: sum((n_i / n)
+  // * cost_i)
+  for (Eigen::Index idx{0}, size{testFoldIDs.size()}; idx < size; ++idx) {
+    ++testFoldSizes[testFoldIDs[idx]];
   }
 
-  return {foldIDs, foldSizes};
+  return {testFoldIDs, testFoldSizes};
 }
 
 // Determine the min and max test fold sizes
 std::pair<Eigen::Index, Eigen::Index> testSizeExtrema(
-    const Eigen::VectorXi& foldSizes) {
+    const Eigen::VectorXi& testFoldSizes) {
   const auto [minIt, maxIt]{std::minmax_element(
-      foldSizes.data(), foldSizes.data() + foldSizes.size())};
+      testFoldSizes.data(), testFoldSizes.data() + testFoldSizes.size())};
   return {static_cast<Eigen::Index>(*minIt), static_cast<Eigen::Index>(*maxIt)};
 }
 
 // Split the test and training indices
-void testTrainSplit(const int testID, const Eigen::VectorXi& foldIDs,
+void testTrainSplit(const int testID, const Eigen::VectorXi& testFoldIDs,
                     Eigen::VectorXi& testIdxs, Eigen::VectorXi& trainIdxs) {
-  const int nrow{static_cast<int>(foldIDs.rows())};
+  const int nrow{static_cast<int>(testFoldIDs.rows())};
   Eigen::Index trIdx{0};
   Eigen::Index tsIdx{0};
 
   for (int rowIdx{0}; rowIdx < nrow; ++rowIdx) {
-    if (foldIDs[rowIdx] == testID) {
+    if (testFoldIDs[rowIdx] == testID) {
       testIdxs[tsIdx++] = rowIdx;
     } else {
       trainIdxs[trIdx++] = rowIdx;
