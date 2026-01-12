@@ -1,8 +1,8 @@
 # Set the C++ standard
 CXX_STD = CXX17
 
-# Suppress Eigen's "ignoring attributes" warnings
-PKG_CXXFLAGS += -Wno-ignored-attributes
+# Suppress Eigen's "stupid" warnings
+PKG_CXXFLAGS += -DEIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
 
 # Eigen BDCSVD documentation states "this algorithm is unlikely to provide accurate result when compiled
 # with unsafe math optimizations. For instance, this concerns Intel's compiler (ICC), which performs such

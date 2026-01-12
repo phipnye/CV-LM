@@ -30,17 +30,17 @@ LambdaCV gcv(const Eigen::Map<Eigen::VectorXd>& y,
   // onto the orthogonal complement of the column space of X)
   const double rssNull{y.squaredNorm() - utySq.sum()};
 
-  // Initialize worker and policy
+  // Initialize worker
   using Deterministic::GCV::WorkerPolicy;
-  const WorkerPolicy policy{utySq, rssNull};
   Deterministic::Worker<WorkerPolicy> worker{lambdasGrid, eigenValsSq, x.rows(),
-                                             centered, policy};
+                                             centered,
+                                             WorkerPolicy{utySq, rssNull}};
 
   // Parallelize over the grid of Lambdas
   const std::size_t end{static_cast<std::size_t>(lambdasGrid.size())};
   RcppParallel::parallelReduce(Constants::begin, end, worker,
                                Constants::grainSize, nThreads);
-  return worker.results_;
+  return worker.getOptimalPair();
 }
 
 // Leave-one-out CV
@@ -61,18 +61,18 @@ LambdaCV loocv(const Eigen::Map<Eigen::VectorXd>& y,
   const Eigen::VectorXd yNull{y - (u * uty.matrix())};
   const Eigen::ArrayXd eigenValsSq{svd.singularValues().array().square()};
 
-  // Initialize Policy and Worker (LOOCV Policy constructor handles its own
-  // internal buffer allocation)
+  // Initialize worker (LOOCV Policy constructor handles its own internal buffer
+  // allocation)
   using Deterministic::LOOCV::WorkerPolicy;
-  WorkerPolicy policy{yNull, u, uSq, uty, x.rows(), eigenValsSq.size()};
-  Deterministic::Worker<WorkerPolicy> worker{lambdasGrid, eigenValsSq, x.rows(),
-                                             centered, std::move(policy)};
+  Deterministic::Worker<WorkerPolicy> worker{
+      lambdasGrid, eigenValsSq, x.rows(), centered,
+      WorkerPolicy{yNull, u, uSq, uty, x.rows(), eigenValsSq.size()}};
 
   // Parallelize over the grid of Lambdas
   const std::size_t end{static_cast<std::size_t>(lambdasGrid.size())};
   RcppParallel::parallelReduce(Constants::begin, end, worker,
                                Constants::grainSize, nThreads);
-  return worker.results_;
+  return worker.getOptimalPair();
 }
 
 // K fold CV
@@ -101,17 +101,7 @@ LambdaCV kcv(const Eigen::Map<Eigen::VectorXd>& y,
   const std::size_t end{static_cast<std::size_t>(k)};
   RcppParallel::parallelReduce(Constants::begin, end, worker,
                                Constants::grainSize, nThreads);
-
-  // Make sure SVD worked consistently
-  Utils::checkSvdStatus(worker.info_);
-
-  // Find the best lambda from the accumulated MSE vector
-  Eigen::Index bestIdx;
-  const double minMSE{worker.mses_.minCoeff(&bestIdx)};
-
-  // Designated initializers not supported until C++20
-  // return LambdaCV{.lambda{lambdasGrid[bestIdx]}, .cv{minMSE}};
-  return LambdaCV{lambdasGrid[bestIdx], minMSE};
+  return worker.getOptimalPair();
 }
 
 }  // namespace Grid

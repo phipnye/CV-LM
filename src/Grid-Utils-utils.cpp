@@ -5,6 +5,7 @@
 
 namespace Grid::Utils {
 
+// Make sure SVD info report successful decomposition
 void checkSvdStatus(const Eigen::ComputationInfo info) {
   if (info == Eigen::Success) {
     return;
@@ -25,15 +26,18 @@ void checkSvdStatus(const Eigen::ComputationInfo info) {
       Rcpp::stop("SVD failed: Invalid input.");
       // break;
     default:
+      // As of time of writing (2026) this line should never execute as all
+      // enum values have been accounted for
       Rcpp::stop("SVD failed: An unknown error occurred during decomposition.");
       // break;
   }
 }
 
+// Perform singular decomposition of X and compute thin U
 Eigen::BDCSVD<Eigen::MatrixXd> svdDecompose(
     const Eigen::Map<Eigen::MatrixXd>& x, const double threshold) {
-  // Perform SVD on full data once (for GCV, we only need singular values and
-  // U'y)
+  // Perform SVD on full data once and retrieve thin U which we need for GCV and
+  // LOOCV
   Eigen::BDCSVD<Eigen::MatrixXd> svd{x, Eigen::ComputeThinU};
 
   // Set threshold at which signular values are considered zero "A singular

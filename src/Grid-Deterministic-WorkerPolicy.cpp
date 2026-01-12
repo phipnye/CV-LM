@@ -4,13 +4,15 @@ namespace Grid::Deterministic {
 
 namespace GCV {
 
+// Main ctor
 WorkerPolicy::WorkerPolicy(const Eigen::ArrayXd& utySq, const double rssNull)
     : utySq_{utySq}, rssNull_{rssNull} {}
 
-double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
-                              const Eigen::ArrayXd& eigenValsSq,
-                              const Eigen::Index nrow,
-                              const bool centered) const {
+// Compute generalized cross-validation result
+double WorkerPolicy::computeCV(const double lambda, const Eigen::ArrayXd& denom,
+                               const Eigen::ArrayXd& eigenValsSq,
+                               const Eigen::Index nrow,
+                               const bool centered) const {
   // trace(H) = sum(eigenVals^2 / (eigenVals^2 + lambda)) [ESL p. 68]
   double traceH{(eigenValsSq / denom).sum()};
 
@@ -25,7 +27,7 @@ double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
                    ((lambda * lambda) * utySq_ / denom.square()).sum()};
 
   // GCV = MSE / (1 - trace(H) / n)^2
-  const double meanResidLeverage{1.0 - traceH / static_cast<double>(nrow)};
+  const double meanResidLeverage{1.0 - (traceH / static_cast<double>(nrow))};
   return rss /
          (static_cast<double>(nrow) * meanResidLeverage * meanResidLeverage);
 }
@@ -34,31 +36,34 @@ double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
 
 namespace LOOCV {
 
+// Main ctor
 WorkerPolicy::WorkerPolicy(const Eigen::VectorXd& yNull,
                            const Eigen::MatrixXd& u, const Eigen::MatrixXd& uSq,
                            const Eigen::ArrayXd& uty, const Eigen::Index nrow,
                            const Eigen::Index eigenValSize)
-    : yNull_{yNull},
+    : diagS_(eigenValSize),
+      diagH_(nrow),
+      resid_(nrow),
+      yNull_{yNull},
       u_{u},
       uSq_{uSq},
-      uty_{uty},
-      diagS_(eigenValSize),
-      diagH_(nrow),
-      resid_(nrow) {}
+      uty_{uty} {}
 
+// Copy ctor (for splitting)
 WorkerPolicy::WorkerPolicy(const WorkerPolicy& other)
-    : yNull_{other.yNull_},
+    : diagS_(other.diagS_.size()),
+      diagH_(other.diagH_.size()),
+      resid_(other.resid_.size()),
+      yNull_{other.yNull_},
       u_{other.u_},
       uSq_{other.uSq_},
-      uty_{other.uty_},
-      diagS_(other.diagS_.size()),
-      diagH_(other.diagH_.size()),
-      resid_(other.resid_.size()) {}
+      uty_{other.uty_} {}
 
-double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
-                              const Eigen::ArrayXd& eigenValsSq,
-                              const Eigen::Index nrow,
-                              const bool centered) const {
+// Compute leave-one-out CV result
+double WorkerPolicy::computeCV(const double lambda, const Eigen::ArrayXd& denom,
+                               const Eigen::ArrayXd& eigenValsSq,
+                               const Eigen::Index nrow,
+                               const bool centered) const {
   // Calculate the diagonal of the Ridge shrinkage matrix = eigenVal_i^2 /
   // (eigenVal_i^2 + lambda)
   diagS_ = eigenValsSq / denom;
@@ -74,8 +79,7 @@ double WorkerPolicy::evaluate(const double lambda, const Eigen::ArrayXd& denom,
 
   // Calculate Ridge residuals: e = y - y_hat = yNull + U * [(lambda /
   // (eigenVals^2 + lambda)) * U'y]
-  resid_ = yNull_;
-  resid_.noalias() += u_ * ((lambda / denom) * uty_).matrix();
+  resid_.noalias() = yNull_ + u_ * ((lambda / denom) * uty_).matrix();
 
   // LOOCV = mean((e_i / (1 - h_ii))^2)
   return (resid_.array() / (1.0 - diagH_)).square().mean();

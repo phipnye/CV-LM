@@ -18,6 +18,9 @@ double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y,
                 const double lambda, const bool generalized, const int seed,
                 const int nThreads, const double threshold,
                 const bool centered) {
+  // Determine which type of model we're fitting (this has potentially important
+  // implications since OLS uses complete orthogonal decomposition whereas ridge
+  // regression uses cholesky
   const bool useOLS{lambda <= threshold};
 
   if (generalized) {
@@ -77,7 +80,7 @@ Rcpp::List gridSearch(const Eigen::Map<Eigen::VectorXd> y,
   }
 
   // Optimal CV results in the form [CV, lambda]
-  Grid::LambdaCV optimalPair{0.0, std::numeric_limits<double>::infinity()};
+  Grid::LambdaCV optimalPair;
 
   // Generalized CV
   if (generalized) {

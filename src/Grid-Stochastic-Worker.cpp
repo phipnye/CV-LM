@@ -7,32 +7,34 @@
 
 #include "CV-Utils-utils.h"
 #include "Grid-Generator.h"
+#include "Grid-LambdaCV.h"
+#include "Grid-Utils-utils.h"
 
 namespace Grid::Stochastic {
 
-// Ctor
+// Main ctor
 Worker::Worker(const Eigen::Map<Eigen::VectorXd>& y,
                const Eigen::Map<Eigen::MatrixXd>& x,
                const Eigen::VectorXi& testFoldIDs,
                const Eigen::VectorXi& testFoldSizes,
                const Generator& lambdasGrid, const Eigen::Index maxTrainSize,
                const Eigen::Index maxTestSize, const double threshold)
-    : y_{y},
-      x_{x},
-      testFoldIDs_{testFoldIDs},
-      testFoldSizes_{testFoldSizes},
-      lambdasGrid_{lambdasGrid},
-      nrow_{x_.rows()},
-      mses_(Eigen::VectorXd::Zero(lambdasGrid.size())),
-      uty_(std::min(nrow_, x.cols())),
+    : svd_(maxTrainSize, x.cols(), Eigen::ComputeThinU | Eigen::ComputeThinV),
+      cvs_{Eigen::VectorXd::Zero(lambdasGrid.size())},
+      uty_(std::min(x.rows(), x.cols())),
       beta_(x.cols()),
       resid_(maxTestSize),
-      eigenVals_(std::min(nrow_, x.cols())),
-      eigenValsSq_(std::min(nrow_, x.cols())),
-      diagW_(std::min(nrow_, x.cols())),
+      eigenVals_(std::min(x.rows(), x.cols())),
+      eigenValsSq_(std::min(x.rows(), x.cols())),
+      diagW_(std::min(x.rows(), x.cols())),
       trainIdxs_(maxTrainSize),
       testIdxs_(maxTestSize),
-      svd_(maxTrainSize, x.cols(), Eigen::ComputeThinU | Eigen::ComputeThinV),
+      testFoldIDs_{testFoldIDs},
+      testFoldSizes_{testFoldSizes},
+      y_{y},
+      x_{x},
+      lambdasGrid_{lambdasGrid},
+      nrow_{x.rows()},
       info_{Eigen::Success} {
   // Prescribe threshold to SVD decomposition where singular values are
   // considered zero "A singular value will be considered nonzero if its value
@@ -42,13 +44,9 @@ Worker::Worker(const Eigen::Map<Eigen::VectorXd>& y,
 
 // Split ctor
 Worker::Worker(const Worker& other, const RcppParallel::Split)
-    : y_{other.y_},
-      x_{other.x_},
-      testFoldIDs_{other.testFoldIDs_},
-      testFoldSizes_{other.testFoldSizes_},
-      lambdasGrid_{other.lambdasGrid_},
-      nrow_{other.nrow_},
-      mses_(Eigen::VectorXd::Zero(other.mses_.size())),
+    : svd_(other.svd_.rows(), other.svd_.cols(),
+           Eigen::ComputeThinU | Eigen::ComputeThinV),
+      cvs_{Eigen::VectorXd::Zero(other.cvs_.size())},
       uty_(other.uty_.size()),
       beta_(other.beta_.size()),
       resid_(other.resid_.size()),
@@ -57,9 +55,15 @@ Worker::Worker(const Worker& other, const RcppParallel::Split)
       diagW_(other.diagW_.size()),
       trainIdxs_(other.trainIdxs_.size()),
       testIdxs_(other.testIdxs_.size()),
-      svd_(other.svd_.rows(), other.svd_.cols(),
-           Eigen::ComputeThinU | Eigen::ComputeThinV),
+      testFoldIDs_{other.testFoldIDs_},
+      testFoldSizes_{other.testFoldSizes_},
+      y_{other.y_},
+      x_{other.x_},
+      lambdasGrid_{other.lambdasGrid_},
+      nrow_{other.nrow_},
       info_{other.info_} {
+  // Prescribe threshold to SVD decomposition where singular values are
+  // considered zero
   svd_.setThreshold(other.svd_.threshold());
 }
 
@@ -69,16 +73,17 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
   // which is a 32-bit integer from R)
   for (int testID{static_cast<int>(begin)}, endID{static_cast<int>(end)};
        testID < endID; ++testID) {
+    // Retrieve size of test and training sets
     const Eigen::Index testSize{testFoldSizes_[testID]};
     const Eigen::Index trainSize{nrow_ - testSize};
 
-    // Weighted MSE contribution
+    // MSE contribution weight
     const double wt{static_cast<double>(testSize) / static_cast<double>(nrow_)};
 
     // Split the test and training indices
     CV::Utils::testTrainSplit(testID, testFoldIDs_, testIdxs_, trainIdxs_);
 
-    // Perform SVD on training set
+    // Perform SVD on training set (uses computation options given in ctor)
     svd_.compute(x_(trainIdxs_.head(trainSize), Eigen::all));
 
     // Make sure SVD is successful
@@ -95,20 +100,20 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
     eigenVals_ = svd_.singularValues();
     eigenValsSq_ = eigenVals_.square();
 
+    // Handle unique case of rank-deficient design matrix with OLS (<= threshold
+    // should always be true since grid start at zero)
     Eigen::Index lambdaIdx{0};
 
-    // Handle unique case of singular design matrix with OLS (<= threshold
-    // should always be true since grid start at zero)
     if (const Eigen::Index rank{svd_.rank()};
         lambdasGrid_[0] <= svd_.threshold() && rank < x_.cols()) {
-      // Manually compute Moore-penrose (minimum-norm solution - strays from R's
-      // lm behavior)
+      // Manually compute Moore-penrose (minimum-norm solution - note that this
+      // strays from R's lm behavior)
       diagW_.setZero();
 
       // diag(W)_i simplifies to diag(1 / eigenVal_i) when lambda == 0.0
       diagW_.head(rank) = eigenVals_.head(rank).array().inverse();
 
-      // Evaluate performance on hold-out fold (MSE)
+      // Evaluate performance on hold-out set (MSE)
       evalTestMSE(lambdaIdx++, testSize, v, wt);
     }
 
@@ -135,7 +140,24 @@ void Worker::join(const Worker& other) {
     return;
   }
 
-  mses_ += other.mses_;
+  // Add up cross-validation results across folds of the data
+  cvs_ += other.cvs_;
+}
+
+// Retrive optimal CV-lambda pairing
+LambdaCV Worker::getOptimalPair() const {
+  // Make sure SVD worked consistently before returning results
+  // NOTE: Imporant we don't call this from a multithreaded context since this
+  // can call Rcpp::stop
+  Utils::checkSvdStatus(info_);
+
+  // Find the smallest cv result
+  Eigen::Index bestIdx;
+  const double minCV{cvs_.minCoeff(&bestIdx)};
+
+  // Designated initializers not supported until C++20
+  // return LambdaCV{.lambda{lambdasGrid[bestIdx]}, .cv{minMSE}};
+  return LambdaCV{lambdasGrid_[bestIdx], minCV};
 }
 
 // Evaluate out-of-sample performance
@@ -153,17 +175,17 @@ void Worker::evalTestMSE(const Eigen::Index lambdaIdx,
    * alpha = (D^2 + lambda * I)^-1 DU'y
    * beta = V * alpha = V * [(D^2 + lambda * I)^-1 D] * U'y
    */
+  // Note that alpha_i = W_ii * (U'y)_i
   beta_.noalias() = v * (diagW_ * uty_.array()).matrix();
 
   // Compute residuals
-  resid_.head(testSize) = y_(testIdxs_.head(testSize));
-  resid_.head(testSize).noalias() -=
-      (x_(testIdxs_.head(testSize), Eigen::all) * beta_);
+  auto testResid{resid_.head(testSize)};
+  testResid.noalias() = y_(testIdxs_.head(testSize)) -
+                        (x_(testIdxs_.head(testSize), Eigen::all) * beta_);
 
   // Accumulate weighted MSE
-  const double testMSE{resid_.head(testSize).squaredNorm() /
-                       static_cast<double>(testSize)};
-  mses_[lambdaIdx] += (wt * testMSE);
+  const double testMSE{testResid.squaredNorm() / static_cast<double>(testSize)};
+  cvs_[lambdaIdx] += (wt * testMSE);
 }
 
 }  // namespace Grid::Stochastic

@@ -7,22 +7,16 @@
 #include <cstddef>
 
 #include "Grid-Generator.h"
+#include "Grid-LambdaCV.h"
 
 namespace Grid::Stochastic {
 
-struct Worker : RcppParallel::Worker {
-  // References
-  const Eigen::Map<Eigen::VectorXd>& y_;
-  const Eigen::Map<Eigen::MatrixXd>& x_;
-  const Eigen::VectorXi& testFoldIDs_;
-  const Eigen::VectorXi& testFoldSizes_;
-  const Generator& lambdasGrid_;
-
-  // Sizes
-  const Eigen::Index nrow_;
+class Worker : public RcppParallel::Worker {
+  // Pre-allocate for SVD
+  Eigen::BDCSVD<Eigen::MatrixXd> svd_;
 
   // Accumulator (vector of MSEs - one per lambda)
-  Eigen::VectorXd mses_;
+  Eigen::VectorXd cvs_;
 
   // Thread-specific data buffers
   Eigen::VectorXd uty_;
@@ -34,13 +28,21 @@ struct Worker : RcppParallel::Worker {
   Eigen::VectorXi trainIdxs_;
   Eigen::VectorXi testIdxs_;
 
-  // Pre-allocate for SVD
-  Eigen::BDCSVD<Eigen::MatrixXd> svd_;
+  // References
+  const Eigen::VectorXi& testFoldIDs_;
+  const Eigen::VectorXi& testFoldSizes_;
+  const Eigen::Map<Eigen::VectorXd>& y_;
+  const Eigen::Map<Eigen::MatrixXd>& x_;
+  const Generator& lambdasGrid_;
 
-  // Enum indicating success of decompositions
+  // Sizes
+  const Eigen::Index nrow_;
+
+  // Enum indicating success of singular value decompositions of training sets
   Eigen::ComputationInfo info_;
 
-  // Ctor
+ public:
+  // Main tor
   explicit Worker(const Eigen::Map<Eigen::VectorXd>& y,
                   const Eigen::Map<Eigen::MatrixXd>& x,
                   const Eigen::VectorXi& testFoldIDs,
@@ -51,6 +53,10 @@ struct Worker : RcppParallel::Worker {
   // Split ctor
   Worker(const Worker& other, RcppParallel::Split);
 
+  // Worker should only be copied via split ctor
+  Worker(const Worker&) = delete;
+  Worker& operator=(const Worker&) = delete;
+
   // RcppParallel requires an operator() to perform the work
   void operator()(std::size_t begin, std::size_t end) override;
 
@@ -58,6 +64,10 @@ struct Worker : RcppParallel::Worker {
   // that were previously split
   void join(const Worker& other);
 
+  // Member access
+  LambdaCV getOptimalPair() const;
+
+ private:
   // Evalutate out-of-sample performance
   void evalTestMSE(Eigen::Index lambdaIdx, Eigen::Index testSize,
                    const Eigen::MatrixXd& v, double wt);

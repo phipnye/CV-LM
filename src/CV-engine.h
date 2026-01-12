@@ -72,7 +72,7 @@ template <typename WorkerModelType, typename... Args>
     } else if constexpr (std::is_same_v<WorkerModelType,
                                         Ridge::Wide::WorkerModel>) {
       // Wide ridge model requires train size and lambda since we're using
-      // cholesky of regularized gram matrix
+      // cholesky of regularized outer product
       return Ridge::Wide::WorkerModelFactory{maxTrainSize,
                                              std::forward<Args>(args)...};
     } else {
@@ -92,7 +92,7 @@ template <typename WorkerModelType, typename... Args>
   const std::size_t end{static_cast<std::size_t>(k)};
   RcppParallel::parallelReduce(Constants::begin, end, worker,
                                Constants::grainSize, nThreads);
-  return worker.mse_;
+  return worker.getCV();
 }
 
 }  // namespace CV

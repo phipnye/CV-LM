@@ -13,10 +13,10 @@ class ScopedRoundingMode {
  public:
   explicit ScopedRoundingMode(int mode);
   ~ScopedRoundingMode();
+
+  // Deprecated behavior
   ScopedRoundingMode(const ScopedRoundingMode&) = delete;
   ScopedRoundingMode& operator=(const ScopedRoundingMode&) = delete;
-  ScopedRoundingMode(const ScopedRoundingMode&&) = delete;
-  ScopedRoundingMode& operator=(ScopedRoundingMode&&) = delete;
 };
 
 // Confirm valid value for K

@@ -32,19 +32,19 @@
 
   # Number of threads (-1 -> defaultNumThreads)
   n.threads <- .assert_valid_threads(n.threads)
-  
+
   # Threshold for QR decomposition (and at which to consider lambda 0 for OLS)
   tol <- .assert_double_scalar(tol, "tol", nonneg = TRUE)
 
   # Whether to penalize the intercept coefficient in the case of ridge regression
   centered <- FALSE
-  
+
   if (lambda > tol) {
     .assert_logical_scalar(penalize.intercept, "penalize.intercept")
-  
+
     # We only center if it's a ridge regression model with an intercept
     centered <- !penalize.intercept && has.intercept
-  
+
     # Center the data and drop the intercept column
     if (centered) {
       tmp <- .center_data(y, X, mt)
@@ -75,7 +75,7 @@
     numeric(1L),
     USE.NAMES = FALSE
   )
-  
+
   data.frame(K = K.vals, CV = cvs, seed = seed)
 }
 
@@ -170,11 +170,11 @@ cvLM.lm <- function(
 
   # If data provided in current call, use it (otherwise, fall back to original)
   if (!missing(data)) {
-    mf.call$data <- data 
+    mf.call$data <- data
   } else {
     mf.call$data <- object$call$data
   }
-  
+
   cl.curr <- match.call(expand.dots = FALSE)
 
   # Handle subset

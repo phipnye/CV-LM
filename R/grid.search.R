@@ -46,7 +46,7 @@ grid.search <- function(
 
   # Number of threads (-1 -> defaultNumThreads)
   n.threads <- .assert_valid_threads(n.threads)
-  
+
   # Threshold for SVD decomposition (and tolerance at which we force inclusion of max.lambda)
   tol <- .assert_double_scalar(tol, "tol", nonneg = TRUE)
 

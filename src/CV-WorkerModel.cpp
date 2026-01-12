@@ -6,6 +6,7 @@ namespace CV {
 
 namespace OLS {
 
+// Main ctor
 WorkerModel::WorkerModel(const Eigen::Index ncol,
                          const Eigen::Index maxTrainSize,
                          const double threshold)
@@ -16,15 +17,17 @@ WorkerModel::WorkerModel(const Eigen::Index ncol,
   cod_.setThreshold(threshold);
 }
 
+// Copy ctor - required for RcppParallel split
 WorkerModel::WorkerModel(const WorkerModel& other)
-    : info_{other.info_}, cod_(other.cod_.rows(), other.cod_.cols()) {
+    : cod_(other.cod_.rows(), other.cod_.cols()) {
   cod_.setThreshold(other.cod_.threshold());
 }
 
+// Compute OLS coefficients using Complete Orthogonal Decomposition
 void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                               const Eigen::Ref<const Eigen::VectorXd>& yTrain,
                               Eigen::VectorXd& beta) {
-  // Decompose training set into the for XP = QTZ
+  // Decompose training set into the form XP = QTZ
   cod_.compute(xTrain);
 
   // if (cod_.info() != Eigen::Success) {
@@ -44,39 +47,41 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
 
 namespace Ridge {
 
-// Use primal form
+// Use primal form X'X + lambda * I
 namespace Narrow {
 
+// Main ctor
 WorkerModel::WorkerModel(const Eigen::Index ncol, const double lambda)
-    : info_{Eigen::Success},
-      lambda_{lambda},
+    : ldlt_(ncol),
       xtxLambda_(ncol, ncol),
-      ldlt_(ncol) {}
+      lambda_{lambda},
+      info_{Eigen::Success} {}
 
+// Copy ctor - required for RcppParallel split
 WorkerModel::WorkerModel(const WorkerModel& other)
-    : info_{other.info_},
-      lambda_{other.lambda_},
+    : ldlt_(other.ldlt_.cols()),
       xtxLambda_(other.xtxLambda_.rows(), other.xtxLambda_.cols()),
-      ldlt_(other.ldlt_.cols()) {}
+      lambda_{other.lambda_},
+      info_{other.info_} {}
 
+// Estimate ridge coefficients using LDLT of regularized covariance matrix
 void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                               const Eigen::Ref<const Eigen::VectorXd>& yTrain,
                               Eigen::VectorXd& beta) {
-  // Generate cross-products (re-use pre-allocated buffers)
+  // Generate regularized covariance matrix
   xtxLambda_.setZero();
   xtxLambda_.diagonal().fill(lambda_);
-  const auto xT{xTrain.transpose()};
-  xtxLambda_.selfadjointView<Eigen::Lower>().rankUpdate(xT);
+  const auto xTranspose{xTrain.transpose()};
+  xtxLambda_.selfadjointView<Eigen::Lower>().rankUpdate(xTranspose);
 
-  // beta_ is a misnomer at this point LDLT supports in-place solving so we fill
-  // beta_ with X'y (the RHS of solve)
-  beta.noalias() = xT * yTrain;
+  // beta_ is a misnomer at this point, LDLT supports in-place solving so we
+  // fill beta_ with X'y (the RHS of solve)
+  beta.noalias() = xTranspose * yTrain;
 
   // Despite positive definiteness, Eigen's documentation states "While the
   // Cholesky decomposition is particularly useful to solve selfadjoint problems
   // like D^*D x = b, for that purpose, we recommend the Cholesky decomposition
-  // without square root which is more stable and even faster." We can also
-  // perform the decomposition in place here
+  // without square root which is more stable and even faster."
   ldlt_.compute(xtxLambda_);
 
   // Make sure decomposition was successful
@@ -89,25 +94,29 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
   ldlt_.solveInPlace(beta);  // just returns true (no need to check)
 }
 
+// Get decomposition success information
+Eigen::ComputationInfo WorkerModel::getInfo() const noexcept { return info_; }
+
 }  // namespace Narrow
 
-// Use dual form
-
+// Use dual form XX' + lambda * I
 namespace Wide {
 
+// Main ctor
 WorkerModel::WorkerModel(const Eigen::Index maxTrainSize, const double lambda)
-    : info_{Eigen::Success},
-      lambda_{lambda},
+    : ldlt_(maxTrainSize),
       xxtLambda_(maxTrainSize, maxTrainSize),
-      ldlt_(maxTrainSize),
-      alpha_(maxTrainSize) {}
+      alpha_(maxTrainSize),
+      lambda_{lambda},
+      info_{Eigen::Success} {}
 
+// Copy ctor - required for RcppParallel split
 WorkerModel::WorkerModel(const WorkerModel& other)
-    : info_{other.info_},
-      lambda_{other.lambda_},
+    : ldlt_(other.ldlt_.cols()),
       xxtLambda_(other.xxtLambda_.rows(), other.xxtLambda_.cols()),
-      ldlt_(other.ldlt_.cols()),
-      alpha_(other.alpha_.size()) {}
+      alpha_(other.alpha_.size()),
+      lambda_{other.lambda_},
+      info_{other.info_} {}
 
 void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                               const Eigen::Ref<const Eigen::VectorXd>& yTrain,
@@ -116,14 +125,14 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
   // sizes across folds)
   const Eigen::Index trainSize{xTrain.rows()};
 
-  // Generate cross-products (re-use pre-allocated buffers)
+  // Generate regularized outer product
   auto xxtLambdaBlock{xxtLambda_.topLeftCorner(trainSize, trainSize)};
   xxtLambdaBlock.setZero();
   xxtLambdaBlock.diagonal().fill(lambda_);
   xxtLambdaBlock.selfadjointView<Eigen::Lower>().rankUpdate(xTrain);
 
-  // Decompose regularized gram matrix (see above in narrow case for why we use
-  // LDLT over LLT)
+  // Decompose regularized outer product (see above in narrow case for why we
+  // use LDLT over LLT)
   ldlt_.compute(xxtLambdaBlock);
 
   // Make sure decomposition was successful
@@ -132,12 +141,15 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
     return;
   }
 
-  // Solve for dual coefficients alpha: (K + lambda * I) * alpha = y
+  // Solve for dual coefficients alpha: (XX' + lambda * I) * alpha = y
   alpha_.head(trainSize) = ldlt_.solve(yTrain);
 
   // Map back to primal space: beta = X' * alpha
   beta.noalias() = xTrain.transpose() * alpha_.head(trainSize);
 }
+
+// Get decomposition success information
+Eigen::ComputationInfo WorkerModel::getInfo() const noexcept { return info_; }
 
 }  // namespace Wide
 

@@ -19,7 +19,7 @@ namespace Grid {
                              const Generator& lambdasGrid, int nThreads,
                              double threshold, bool centered);
 
-// K fold CV
+// K-fold CV
 [[nodiscard]] LambdaCV kcv(const Eigen::Map<Eigen::VectorXd>& y,
                            const Eigen::Map<Eigen::MatrixXd>& x, int k,
                            const Generator& lambdasGrid, int seed, int nThreads,

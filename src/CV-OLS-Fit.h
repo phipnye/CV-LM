@@ -2,8 +2,7 @@
 
 #include <RcppEigen.h>
 
-#include <type_traits>
-#include <utility>
+#include <optional>
 
 namespace CV::OLS {
 
@@ -12,17 +11,15 @@ class Fit {
   // Eigen objects
   const Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod_;
   const Eigen::VectorXd qty_;
+  const std::optional<Eigen::ArrayXd> diagH_;  // not need if !NeedHat
 
   // Scalars
   const Eigen::Index nrow_;
   const Eigen::Index rank_;
 
-  // Using std::conditional to avoid allocating memory for diagH_ if not needed
-  const std::conditional_t<NeedHat, Eigen::ArrayXd, bool> diagH_;
-
  public:
-  explicit Fit(Eigen::VectorXd y, const Eigen::Map<Eigen::MatrixXd>& x,
-               const double threshold)
+  explicit Fit(const Eigen::Map<Eigen::VectorXd>& y,
+               const Eigen::Map<Eigen::MatrixXd>& x, const double threshold)
       // Compute complete orthogonal decomposition of x
       : cod_{[&]() {
           // Perform QR/Complete orthogonal decomposition XP = QTZ
@@ -34,20 +31,11 @@ class Fit {
           // this threshold only affects other methods like solve and rank, not
           // the decomposition itself
           cod.setThreshold(threshold);
-
           return cod;
         }()},
 
         // Construct Q'y
-        qty_{[&]() {
-          Eigen::VectorXd qty{std::move(y)};
-          qty.applyOnTheLeft(cod_.householderQ().transpose());
-          return qty;
-        }()},
-
-        // Scalars
-        nrow_{x.rows()},
-        rank_{cod_.rank()},
+        qty_{cod_.householderQ().transpose() * y},
 
         // Diagonal of hat matrix
         diagH_{[&]() {
@@ -55,19 +43,23 @@ class Fit {
             // Leverage values: h_ii = [X(X'X)^-1 X']_ii
             // Using QR, H = Q_1Q_1' so h_ii = sum_{j=1}^{rank} q_{ij}^2
             // (rowwise squared norm of thin Q)
-            Eigen::MatrixXd qThin{Eigen::MatrixXd::Identity(nrow_, rank_)};
-            qThin.applyOnTheLeft(cod_.householderQ());
+            const Eigen::MatrixXd qThin{
+                cod_.householderQ() *
+                Eigen::MatrixXd::Identity(x.rows(), cod_.rank())};
             Eigen::ArrayXd diagH{qThin.rowwise().squaredNorm().array()};
             return diagH;
           } else {
-            return false;
+            return std::nullopt;
           }
-        }()} {}
+        }()},
 
+        // Scalars
+        nrow_{x.rows()},
+        rank_{cod_.rank()} {}
+
+  // Class should be immobile based on its intended use
   Fit(const Fit&) = delete;
-  Fit(Fit&&) = default;
   Fit& operator=(const Fit&) = delete;
-  Fit& operator=(Fit&&) = default;
 
   // GCV = MSE / (1 - trace(H)/n)^2
   [[nodiscard]] double gcv() const {
@@ -81,7 +73,7 @@ class Fit {
   [[nodiscard]] double loocv() const {
     static_assert(NeedHat,
                   "LOOCV requires Fit template parameter NeedHat = true");
-    return (residuals().array() / (1.0 - diagH_)).square().mean();
+    return (residuals().array() / (1.0 - *diagH_)).square().mean();
   }
 
  private:
@@ -116,5 +108,4 @@ class Fit {
     return resid;
   }
 };
-
 }  // namespace CV::OLS

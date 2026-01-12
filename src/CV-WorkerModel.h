@@ -6,19 +6,24 @@ namespace CV {
 
 namespace OLS {
 
-struct WorkerModel {
-  Eigen::ComputationInfo info_{
-      Eigen::Success};  // CompleteOrthogonalDecomposition::info
-                        // always returns success
+class WorkerModel {
+ public:
+  // Flag indicating whether the decomposition can fail
+  static constexpr bool canFail{false};  // COD is always succesful
+
+ private:
+  // Members
   Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod_;
 
+ public:
+  // Main ctor
   explicit WorkerModel(Eigen::Index ncol, Eigen::Index maxTrainSize,
                        double threshold);
-  explicit WorkerModel(const WorkerModel& other);
-  WorkerModel(WorkerModel&&) = default;
-  WorkerModel& operator=(const WorkerModel&) = delete;
-  WorkerModel& operator=(WorkerModel&&) = delete;
 
+  // Copy ctor for worker splits
+  WorkerModel(const WorkerModel& other);
+
+  // Fit OLS coefficients to training set
   void computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                    const Eigen::Ref<const Eigen::VectorXd>& yTrain,
                    Eigen::VectorXd& beta);
@@ -31,45 +36,66 @@ namespace Ridge {
 // Use primal form
 namespace Narrow {
 
-struct WorkerModel {
-  Eigen::ComputationInfo info_;
-  const double lambda_;
-  Eigen::MatrixXd xtxLambda_;
+class WorkerModel {
+ public:
+  // Flag indicating whether the decomposition can fail
+  static constexpr bool canFail{true};  // ldlt can fail because of a zero pivot
+
+ private:
+  // Members
   Eigen::LDLT<Eigen::MatrixXd> ldlt_;
+  Eigen::MatrixXd xtxLambda_;
+  const double lambda_;
+  Eigen::ComputationInfo info_;
 
+ public:
+  // Main ctor
   explicit WorkerModel(Eigen::Index ncol, double lambda);
-  explicit WorkerModel(const WorkerModel& other);
-  WorkerModel(WorkerModel&&) = default;
-  WorkerModel& operator=(const WorkerModel&) = delete;
-  WorkerModel& operator=(WorkerModel&&) = delete;
 
+  // Copy ctor for worker splits
+  WorkerModel(const WorkerModel& other);
+
+  // Fit ridge regression coefficients to training set
   void computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                    const Eigen::Ref<const Eigen::VectorXd>& yTrain,
                    Eigen::VectorXd& beta);
+
+  // Get decomposition success info
+  [[nodiscard]] Eigen::ComputationInfo getInfo() const noexcept;
 };
 
 }  // namespace Narrow
 
 namespace Wide {
 
-struct WorkerModel {
-  Eigen::ComputationInfo info_;
-  const double lambda_;
-  Eigen::MatrixXd xxtLambda_;
+class WorkerModel {
+ public:
+  // Flag indicating whether the decomposition can fail
+  static constexpr bool canFail{true};  // ldlt can fail because of a zero pivot
+
+ private:
+  // Members
   Eigen::LDLT<Eigen::MatrixXd> ldlt_;
+  Eigen::MatrixXd xxtLambda_;
+  Eigen::VectorXd alpha_;  // additional data buffer for dual coefficients where
+                           // beta = X' * alpha
+  const double lambda_;
+  Eigen::ComputationInfo info_;
 
-  // Additional data buffer for dual coefficients where beta = X' * alpha
-  Eigen::VectorXd alpha_;
-
+ public:
+  // Main ctor
   explicit WorkerModel(Eigen::Index maxTrainSize, double lambda);
-  explicit WorkerModel(const WorkerModel& other);
-  WorkerModel(WorkerModel&&) = default;
-  WorkerModel& operator=(const WorkerModel&) = delete;
-  WorkerModel& operator=(WorkerModel&&) = delete;
 
+  // Copy ctor for worker splits
+  WorkerModel(const WorkerModel& other);
+
+  // Fit ridge regression coefficients to training set
   void computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                    const Eigen::Ref<const Eigen::VectorXd>& yTrain,
                    Eigen::VectorXd& beta);
+
+  // Get decomposition success info
+  [[nodiscard]] Eigen::ComputationInfo getInfo() const noexcept;
 };
 
 }  // namespace Wide

@@ -3,22 +3,23 @@
 #include <RcppEigen.h>
 
 #include <algorithm>
-#include <type_traits>
+#include <optional>
 
 namespace CV::Ridge {
 
 template <bool NeedHat>
 class Fit {
+  // Eigen objects
+  const Eigen::MatrixXd
+      inv_;  // holds (X'X + lambda * I)^-1 if primal/narrow, or (XX'
+             // + lambda * I)^-1 if dual/wide
+  const Eigen::VectorXd resid_;
+  const std::optional<Eigen::ArrayXd> diagH_;
+
   // Scalars
   const Eigen::Index nrow_;
   const Eigen::Index ncol_;
   const double lambda_;
-
-  // Eigen objects
-  const Eigen::MatrixXd inv_;  // holds (X'X + lambda * I)^-1 if primal, or (XX'
-                               // + lambda * I)^-1 if wide
-  const Eigen::VectorXd resid_;
-  const std::conditional_t<NeedHat, Eigen::ArrayXd, bool> diagH_;
 
   // Flags
   const bool centered_;
@@ -27,19 +28,17 @@ class Fit {
   explicit Fit(const Eigen::Map<Eigen::VectorXd>& y,
                const Eigen::Map<Eigen::MatrixXd>& x, const double lambda,
                const bool centered)
-      : nrow_{x.rows()},
-        ncol_{x.cols()},
-        lambda_{lambda},
-
-        // Decompose and invert appropriate matrix
+      :  // Decompose and invert appropriate matrix
         inv_{[&]() {
           // Create X'X + lambda * I or XX' + lambda * I
-          const Eigen::Index dim{std::min(nrow_, ncol_)};
+          const Eigen::Index nrow{x.rows()};
+          const Eigen::Index ncol{x.cols()};
+          const Eigen::Index dim{std::min(nrow, ncol)};
           Eigen::MatrixXd mat{Eigen::MatrixXd::Zero(dim, dim)};
-          mat.diagonal().fill(lambda_);
+          mat.diagonal().fill(lambda);
 
-          if (nrow_ < ncol_) {
-            // Kernel matrix XX' + lambda * I
+          if (nrow < ncol) {
+            // Outer product matrix XX' + lambda * I
             mat.selfadjointView<Eigen::Lower>().rankUpdate(x);
           } else {
             // Regularized covariance matrix X'X + lambda * I
@@ -50,8 +49,9 @@ class Fit {
           // Cholesky decomposition is particularly useful to solve selfadjoint
           // problems like D^*D x = b, for that purpose, we recommend the
           // Cholesky decomposition without square root which is more stable and
-          // even faster." LDLT supports in-place decomposition
-          const Eigen::LDLT<Eigen::Ref<Eigen::MatrixXd>> ldlt{mat};
+          // even faster."
+          const Eigen::LDLT<Eigen::Ref<Eigen::MatrixXd>> ldlt{
+              mat};  // use in-place decomposition
 
           // LDLT supports solving in-place
           Eigen::MatrixXd inv{Eigen::MatrixXd::Identity(dim, dim)};
@@ -60,18 +60,26 @@ class Fit {
         }()},
 
         /*
-        resid   = y - x * beta
-        primal: = y - (X'X + lambda * I)^-1 * X'y
-        dual:   = lambda * (XX' + lambda * I)^-1 y
+         * resid   = y - X * beta
+         * primal: = y - X (X'X + lambda * I)^-1 * X'y
+         * dual:   = y - X (X' * alpha) where beta = X' * alpha
+         *         = y - X [X' (XX' + lambda * I)^-1 * y]
+         *         = [I - XX'(XX' + lambda * I)^-1] * y
+         *         = [I - XX'Z] * y
+         *         = [Z^-1 Z - XX'Z] * y
+         *         = [Z^-1 - XX'] * Zy
+         *         = [(XX' + lambda * I) - XX'] * (XX' + lambda * I)^-1 y
+         *         = [lambda * I] * (XX' + lambda * I)^-1 y
+         *         = lambda * (XX' + lambda * I)^-1 y
          */
         resid_{[&]() {
-          Eigen::VectorXd resid(nrow_);
+          const Eigen::Index nrow{x.rows()};
+          Eigen::VectorXd resid(nrow);
 
-          if (nrow_ < ncol_) {
-            resid.noalias() = lambda_ * (inv_ * y);
+          if (nrow < x.cols()) {
+            resid.noalias() = lambda * (inv_ * y);
           } else {
-            resid = y;
-            resid.noalias() = x * (inv_ * (x.transpose() * y));
+            resid.noalias() = y - (x * (inv_ * (x.transpose() * y)));
           }
 
           return resid;
@@ -80,11 +88,12 @@ class Fit {
         // Diagonal of hat matrix
         diagH_{[&]() {
           if constexpr (NeedHat) {
-            Eigen::ArrayXd diagH(nrow_);
+            const Eigen::Index nrow{x.rows()};
+            Eigen::ArrayXd diagH(nrow);
 
-            if (nrow_ < ncol_) {
+            if (nrow < x.cols()) {
               // diag(H) = diag(I - lambda * (XX' + lambda * I)^-1)
-              diagH = 1.0 - (lambda_ * inv_.diagonal().array());
+              diagH = 1.0 - (lambda * inv_.diagonal().array());
             } else {
               // h_ii = x_i' * (X'X + lambda * I)^-1 * x_i
               diagH = (x * inv_).cwiseProduct(x).rowwise().sum().array();
@@ -95,20 +104,26 @@ class Fit {
             // verified in R this is the case regardless of whether the data is
             // narrow or wide)
             if (centered) {
-              diagH += (1.0 / static_cast<double>(nrow_));
+              diagH += (1.0 / static_cast<double>(nrow));
             }
 
             return diagH;
           } else {
-            return false;
+            return std::nullopt;
           }
         }()},
+
+        // Scalars
+        nrow_{x.rows()},
+        ncol_{x.cols()},
+        lambda_{lambda},
+
+        // Flags
         centered_{centered} {}
 
+  // Class should be immobile due to its intended use
   Fit(const Fit&) = delete;
-  Fit(Fit&&) = default;
   Fit& operator=(const Fit&) = delete;
-  Fit& operator=(Fit&&) = default;
 
   // GCV = MSE / (1 - trace(H)/n)^2
   [[nodiscard]] double gcv() const {
@@ -120,7 +135,7 @@ class Fit {
   [[nodiscard]] double loocv() const {
     static_assert(NeedHat,
                   "LOOCV requires Fit template parameter NeedHat = true");
-    return (resid_.array() / (1.0 - diagH_)).square().mean();
+    return (resid_.array() / (1.0 - *diagH_)).square().mean();
   }
 
  private:
@@ -141,13 +156,6 @@ class Fit {
   [[nodiscard]] double traceH() const {
     // If the data was centered in R, we need to add one to capture the dropped
     // intercept column
-    //
-    // Note: It was manually verified in R that for a model with an intercept
-    // and centered features, the trace of the full hat matrix:
-    // H = X_full (X_full' X_full + lambda * I_p)^-1 X_full'
-    // is equal to the shortcut trace of the centered features plus one:
-    // trace(H) = [n - lambda * trace((X_c X_c' + lambda * I_n)^-1)] + 1.0
-    // This holds regardless of whether the primal or dual shortcut is used
     const double correction{centered_ ? 1.0 : 0.0};
 
     if (nrow_ < ncol_) {

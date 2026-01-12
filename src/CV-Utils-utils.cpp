@@ -1,10 +1,12 @@
 #include "CV-Utils-utils.h"
 
 #include <Rcpp.h>
+#include <RcppEigen.h>
 
 #include <algorithm>
 #include <cfenv>
 #include <cmath>
+#include <utility>
 
 namespace CV::Utils {
 
@@ -25,19 +27,31 @@ int kCheck(const int nrow, const int k0) {
     return k0;
   }
 
-  const ScopedRoundingMode roundGuard{
+  /*
+   * We're essentially trying to mimic (from boot::cv.glm):
+   *   kvals <- unique(round(n/(1L:floor(n/2))))
+   *   temp <- abs(kvals - K)
+   *   if (!any(temp == 0))
+   *     K <- kvals[temp == min(temp)][1L]
+   *   if (K != K.o)
+   *     warning(gettextf("'K' has been set to %f", K), domain = NA)
+   */
+
+  [[maybe_unused]] const ScopedRoundingMode roundGuard{
       FE_TONEAREST};  // round to nearest, ties to even
   const double nDbl{static_cast<double>(nrow)};
-  const int nHalf{nrow / 2};
+  const int floorNHalf{nrow / 2};
+
+  // Start with den = 1 (we already checked for no difference at beginning of
+  // function)
   int closestK{nrow};
   int minDiff{closestK - k0};
 
   // Consider k values between n and 2 (iterates through possible denominators
-  // to find a K value that fits n, (like the kvals <-
-  // unique(round(n/(1L:floor(n/2)))) line in cv.glm)
-  for (int den{1}; den < nHalf; ++den) {
-    const int kVal{static_cast<int>(
-        std::nearbyint(nDbl / (den + 1)))};  // use banker's rounding
+  // to find a K value that fits n
+  for (int den{2}; den <= floorNHalf; ++den) {
+    const int kVal{
+        static_cast<int>(std::nearbyint(nDbl / den))};  // use banker's rounding
     const int absDiff{std::abs(k0 - kVal)};
 
     if (absDiff == 0) {
@@ -65,13 +79,19 @@ std::pair<Eigen::VectorXi, Eigen::VectorXi> setupFolds(const int seed,
   const Rcpp::Function sampleR{"sample"};
   // ReSharper disable once CppExpressionWithoutSideEffects
   setSeed(seed);
+
+  /*
+   * Replicate fold assignment from boot::cv.glm:
+   *   f <- ceiling(n/K)
+   *   s <- sample0(rep(1L:K, f), n)
+   */
   const int repeats{static_cast<int>(std::ceil(static_cast<double>(nrow) / k))};
   const Rcpp::IntegerVector seqVec{Rcpp::rep(Rcpp::seq(1, k), repeats)};
   const Rcpp::IntegerVector sampled{sampleR(seqVec, nrow)};
-  Eigen::VectorXi testFoldIDs{Rcpp::as<Eigen::VectorXi>(sampled)};
 
   // R's internal documentation states the number of rows for a matrix are
   // limited to 32-bit values so VectorXi is safe here
+  Eigen::VectorXi testFoldIDs{Rcpp::as<Eigen::VectorXi>(sampled)};
   Eigen::VectorXi testFoldSizes{Eigen::VectorXi::Zero(k)};
 
   // Convert testFoldIDs to be zero-indexed
@@ -89,9 +109,10 @@ std::pair<Eigen::VectorXi, Eigen::VectorXi> setupFolds(const int seed,
 // Determine the min and max test fold sizes
 std::pair<Eigen::Index, Eigen::Index> testSizeExtrema(
     const Eigen::VectorXi& testFoldSizes) {
-  const auto [minIt, maxIt]{std::minmax_element(
+  const auto [minIter, maxIter]{std::minmax_element(
       testFoldSizes.data(), testFoldSizes.data() + testFoldSizes.size())};
-  return {static_cast<Eigen::Index>(*minIt), static_cast<Eigen::Index>(*maxIt)};
+  return {static_cast<Eigen::Index>(*minIter),
+          static_cast<Eigen::Index>(*maxIter)};
 }
 
 // Split the test and training indices
@@ -101,6 +122,7 @@ void testTrainSplit(const int testID, const Eigen::VectorXi& testFoldIDs,
   Eigen::Index trIdx{0};
   Eigen::Index tsIdx{0};
 
+  // Fill the Idxs buffers with the corresponding test/train row indices
   for (int rowIdx{0}; rowIdx < nrow; ++rowIdx) {
     if (testFoldIDs[rowIdx] == testID) {
       testIdxs[tsIdx++] = rowIdx;
@@ -123,8 +145,9 @@ void checkLdltStatus(const Eigen::ComputationInfo info) {
     case Eigen::NumericalIssue:
       Rcpp::stop(
           "LDLT failed: Numerical issue (zero pivot). This suggests the matrix "
-          "X'X + lambda*I is singular. Try increasing the regularization "
-          "lambda or checking for columns with constant values/low variance.");
+          "X'X + lambda * I is nearly singular. Try increasing the "
+          "regularization parameter `lambda` or checking for columns with "
+          "constant values/low variance.");
       // break; - not reachable
 
     default:
