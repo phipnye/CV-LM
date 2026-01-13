@@ -21,12 +21,12 @@ Worker::Worker(const Eigen::Map<Eigen::VectorXd>& y,
                const Eigen::Index maxTestSize, const double threshold)
     : svd_(maxTrainSize, x.cols(), Eigen::ComputeThinU | Eigen::ComputeThinV),
       cvs_{Eigen::VectorXd::Zero(lambdasGrid.size())},
-      uty_(std::min(x.rows(), x.cols())),
+      uty_(std::min(maxTrainSize, x.cols())),
       beta_(x.cols()),
       resid_(maxTestSize),
-      eigenVals_(std::min(x.rows(), x.cols())),
-      eigenValsSq_(std::min(x.rows(), x.cols())),
-      diagW_(std::min(x.rows(), x.cols())),
+      eigenVals_(std::min(maxTrainSize, x.cols())),
+      eigenValsSq_(std::min(maxTrainSize, x.cols())),
+      diagW_(std::min(maxTrainSize, x.cols())),
       trainIdxs_(maxTrainSize),
       testIdxs_(maxTestSize),
       testFoldIDs_{testFoldIDs},
@@ -100,14 +100,16 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
     eigenVals_ = svd_.singularValues();
     eigenValsSq_ = eigenVals_.square();
 
-    // Handle unique case of rank-deficient design matrix with OLS (<= threshold
-    // should always be true since grid start at zero)
+    // Handle unique case of a design matrix that is not of full column rank
+    // with OLS (<= threshold should always be true since grid start at zero)
     Eigen::Index lambdaIdx{0};
 
     if (const Eigen::Index rank{svd_.rank()};
         lambdasGrid_[0] <= svd_.threshold() && rank < x_.cols()) {
-      // Manually compute Moore-penrose (minimum-norm solution - note that this
-      // strays from R's lm behavior)
+      // Compute the unique minimum-norm solution via the MP pseudoinverse (note
+      // that this produces different coefficients than R's lm but will only
+      // produce different out-of-sample predictions when the system is
+      // underdetermined)
       diagW_.setZero();
 
       // diag(W)_i simplifies to diag(1 / eigenVal_i) when lambda == 0.0
@@ -119,6 +121,8 @@ void Worker::operator()(const std::size_t begin, const std::size_t end) {
 
     for (const Eigen::Index nLambda{lambdasGrid_.size()}; lambdaIdx < nLambda;
          ++lambdaIdx) {
+      // At this point, it's important lambda > 0 or all eigen vals > 0, 
+      // so we don't have a 0/0 case  
       // diag(W)_i = diag(eigenVal_i / eigenVal_i^2 + lambda)
       diagW_ = eigenVals_ / (eigenValsSq_ + lambdasGrid_[lambdaIdx]);
 

@@ -36,10 +36,13 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
 
   // This behavior strays from R's lm behavior when the design matrix is not of
   // full-column rank, R (as of 2026) uses Dqrdc2/Linpack which zeros out the
-  // last ncol - rank coefficients on the "redundnant" columns of the design
+  // last ncol - rank coefficients on the "redundant" columns of the design
   // matrix while COD gives the unique minimum norm solution via a second
   // orthogonal transform XP = QR = QTZ, which allows solving through a
   // truncated upper triangular matrix T* [rank x rank]
+  // Note: While this results in different coefficients for any rank-deficient
+  // matrix, out-of-sample predictions will only diverge from R's when
+  // the system is underdetermined
   beta = cod_.solve(yTrain);
 }
 

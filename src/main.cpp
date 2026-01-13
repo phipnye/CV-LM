@@ -22,7 +22,7 @@ double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y,
   // implications since OLS uses complete orthogonal decomposition whereas ridge
   // regression uses cholesky
   const bool useOLS{lambda <= threshold};
-
+  
   if (generalized) {
     return useOLS ? CV::gcv<CV::OLS::Fit>(y, x, threshold)
                   : CV::gcv<CV::Ridge::Fit>(y, x, lambda, centered);
