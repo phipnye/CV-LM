@@ -7,16 +7,29 @@ namespace Grid::Deterministic {
 namespace GCV {
 
 class WorkerPolicy {
-  const Eigen::ArrayXd& utySq_;
+  // Thread-specific buffers
+  Eigen::VectorXd coordShrinkFactorsDenom_;
+
+  // References
+  const Eigen::VectorXd& uTySq_;
+  const Eigen::VectorXd& singularValsSq_;
+
+  // Scalars
   const double rssNull_;
+  const Eigen::Index nrow_;
+
+  // Flag for whether data was centered in R
+  const bool centered_;
 
  public:
   // Main ctor
-  WorkerPolicy(const Eigen::ArrayXd& utySq, double rssNull);
+  WorkerPolicy(const Eigen::VectorXd& uTySq,
+               const Eigen::VectorXd& singularValsSq, double rssNull,
+               Eigen::Index nrow, bool centered);
 
   // Needs to be copyable for splitting and moveable for std::move in Worker
   // ctor
-  WorkerPolicy(const WorkerPolicy&) = default;
+  WorkerPolicy(const WorkerPolicy&);
   WorkerPolicy(WorkerPolicy&&) = default;
 
   // Assignments shouldn't be necessary
@@ -24,9 +37,7 @@ class WorkerPolicy {
   WorkerPolicy& operator=(WorkerPolicy&&) = delete;
 
   // Calculate generalized cross-validation result
-  [[nodiscard]] double computeCV(double lambda, const Eigen::ArrayXd& denom,
-                                 const Eigen::ArrayXd& eigenValsSq,
-                                 Eigen::Index nrow, bool centered) const;
+  [[nodiscard]] double computeCV(double lambda);
 };
 
 }  // namespace GCV
@@ -34,22 +45,31 @@ class WorkerPolicy {
 namespace LOOCV {
 
 class WorkerPolicy {
-  // Thread-specific buffers (mutable for evaluation)
-  mutable Eigen::ArrayXd diagS_;
-  mutable Eigen::ArrayXd diagH_;
-  mutable Eigen::VectorXd resid_;
+  // Thread-specific buffers
+  Eigen::VectorXd coordShrinkFactors_;
+  Eigen::VectorXd coordShrinkFactorsDenom_;
+  Eigen::VectorXd diagHat_;
+  Eigen::VectorXd resid_;
 
   // References
   const Eigen::VectorXd& yNull_;
   const Eigen::MatrixXd& u_;
   const Eigen::MatrixXd& uSq_;
-  const Eigen::ArrayXd& uty_;
+  const Eigen::VectorXd& uTy_;
+  const Eigen::VectorXd& singularValsSq_;
+
+  // Scalars
+  Eigen::Index nrow_;
+
+  // Flag for whether data was centered in R
+  const bool centered_;
 
  public:
   // Main ctor
   WorkerPolicy(const Eigen::VectorXd& yNull, const Eigen::MatrixXd& u,
-               const Eigen::MatrixXd& uSq, const Eigen::ArrayXd& uty,
-               Eigen::Index nrow, Eigen::Index eigenValSize);
+               const Eigen::MatrixXd& uSq, const Eigen::VectorXd& uTy,
+               const Eigen::VectorXd& singularValsSq, Eigen::Index nrow,
+               bool centered);
 
   // Needs to be copyable for splitting and moveable for std::move in Worker
   // ctor
@@ -61,9 +81,7 @@ class WorkerPolicy {
   WorkerPolicy& operator=(WorkerPolicy&&) = delete;
 
   // Calculate leave-one-out CV result
-  [[nodiscard]] double computeCV(double lambda, const Eigen::ArrayXd& denom,
-                                 const Eigen::ArrayXd& eigenValsSq,
-                                 Eigen::Index nrow, bool centered) const;
+  [[nodiscard]] double computeCV(double lambda);
 };
 
 }  // namespace LOOCV

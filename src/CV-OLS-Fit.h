@@ -4,14 +4,18 @@
 
 #include <optional>
 
+#include "Enums-enums.h"
+#include "Stats-computations.h"
+#include "Utils-Decompositions-utils.h"
+
 namespace CV::OLS {
 
-template <bool NeedHat>
+template <Enums::AnalyticMethod CVMethod>
 class Fit {
   // Eigen objects
-  const Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod_;
-  const Eigen::VectorXd qty_;
-  const std::optional<Eigen::ArrayXd> diagH_;  // not need if !NeedHat
+  const Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> qtz_;
+  const Eigen::VectorXd qTy_;
+  const std::optional<Eigen::VectorXd> diagHat_;  // not needed for GCV
 
   // Scalars
   const Eigen::Index nrow_;
@@ -20,34 +24,28 @@ class Fit {
  public:
   explicit Fit(const Eigen::Map<Eigen::VectorXd>& y,
                const Eigen::Map<Eigen::MatrixXd>& x, const double threshold)
-      // Compute complete orthogonal decomposition of x
-      : cod_{[&]() {
-          // Perform QR/Complete orthogonal decomposition XP = QTZ
-          Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod{x};
-
-          // Prescribe threshold to decomposition where singular values are
-          // considered zero "A pivot will be considered nonzero if its absolute
-          // value is strictly greater than |pivot|⩽threshold×|maxpivot| " -
-          // this threshold only affects other methods like solve and rank, not
-          // the decomposition itself
-          cod.setThreshold(threshold);
-          return cod;
-        }()},
+      // Compute complete orthogonal decomposition of X (XP = QTZ)
+      : qtz_{Utils::Decompositions::cod(x, threshold)},
 
         // Construct Q'y
-        qty_{cod_.householderQ().transpose() * y},
+        qTy_{qtz_.householderQ().transpose() * y},
 
         // Diagonal of hat matrix
-        diagH_{[&]() {
-          if constexpr (NeedHat) {
+        diagHat_{[&]() -> std::optional<Eigen::VectorXd> {
+          // We only need the diagonal entries of the projection matrix for
+          // LOOCV
+          if constexpr (CVMethod == Enums::AnalyticMethod::LOOCV) {
             // Leverage values: h_ii = [X(X'X)^-1 X']_ii
             // Using QR, H = Q_1Q_1' so h_ii = sum_{j=1}^{rank} q_{ij}^2
             // (rowwise squared norm of thin Q)
             const Eigen::MatrixXd qThin{
-                cod_.householderQ() *
-                Eigen::MatrixXd::Identity(x.rows(), cod_.rank())};
-            Eigen::ArrayXd diagH{qThin.rowwise().squaredNorm().array()};
-            return diagH;
+                qtz_.householderQ() *
+                Eigen::MatrixXd::Identity(x.rows(), qtz_.rank())};
+
+            // Use NRVO to prevent against potential dangling references with
+            // expression templates
+            Eigen::VectorXd diagHat{qThin.rowwise().squaredNorm()};
+            return diagHat;
           } else {
             return std::nullopt;
           }
@@ -55,25 +53,22 @@ class Fit {
 
         // Scalars
         nrow_{x.rows()},
-        rank_{cod_.rank()} {}
+        rank_{qtz_.rank()} {}
 
   // Class should be immobile based on its intended use
   Fit(const Fit&) = delete;
   Fit& operator=(const Fit&) = delete;
 
-  // GCV = MSE / (1 - trace(H)/n)^2
-  [[nodiscard]] double gcv() const {
-    // Thought was given to preventing zero-division but decided returning inf
-    // is the most "mathematically" honest answer
-    const double mrl{meanResidualLeverage()};
-    return mse() / (mrl * mrl);
-  }
-
-  // LOOCV_error_i = e_i / (1 - h_ii))
-  [[nodiscard]] double loocv() const {
-    static_assert(NeedHat,
-                  "LOOCV requires Fit template parameter NeedHat = true");
-    return (residuals().array() / (1.0 - *diagH_)).square().mean();
+  [[nodiscard]] double cv() const {
+    if constexpr (CVMethod == Enums::AnalyticMethod::GCV) {
+      const double traceHat{static_cast<double>(rank_)};  // trace(H) = rank(X)
+      return Stats::gcv(rss(), traceHat, nrow_);
+    } else {
+      // This assert should also serve as making sure the diagHat_ member has a
+      // value before "dereferencing"
+      Enums::assertExpected<CVMethod, Enums::AnalyticMethod::LOOCV>();
+      return Stats::loocv(residuals(), *diagHat_);
+    }
   }
 
  private:
@@ -82,30 +77,23 @@ class Fit {
     // Calculate RSS (using the full n x n orthogonal matrix Q, we transform y
     // into Q'y and partition the squared norm of y into two components:
     // ||y||^2 = ||(Q'y).head(rank)||^2 + ||(Q'y).tail(n - rank)||^2
-    // where the first term is the ESS the second term is the RSS
-    return qty_.tail(nrow_ - rank_).squaredNorm();
-  }
-
-  // Mean squared error
-  [[nodiscard]] double mse() const {
-    return rss() / static_cast<double>(nrow_);
-  }
-
-  // Mean residual leverage = (1 - trace(H)/n)
-  [[nodiscard]] double meanResidualLeverage() const {
-    return 1.0 - (static_cast<double>(rank_) /
-                  static_cast<double>(nrow_));  // trace(H) = rank(X)
+    // where the first term is the ESS the second term is the RSS [see "Matrix
+    // Computations" Golub p.263 4th ed.]
+    return qTy_.tail(nrow_ - rank_).squaredNorm();
   }
 
   [[nodiscard]] Eigen::VectorXd residuals() const {
     // Zero out the components in the column space (the first 'rank' elements,
-    // leaving only the components in the orthogonal complement)
-    Eigen::VectorXd resid{qty_};
-    resid.head(rank_).setZero();
+    // leaving only the components in the orthogonal complement) [see "Matrix
+    // Computations" Golub p.263 4th ed.]
+    Eigen::VectorXd resid{Eigen::VectorXd::Zero(nrow_)};
+    const Eigen::Index tailSize{nrow_ - rank_};
+    resid.tail(tailSize) = qTy_.tail(tailSize);
 
     // Transform back to original space: resid = Q * [0, Q'y.tail(n - rank)]'
-    resid.applyOnTheLeft(cod_.householderQ());
+    resid.applyOnTheLeft(qtz_.householderQ());
     return resid;
   }
 };
+
 }  // namespace CV::OLS

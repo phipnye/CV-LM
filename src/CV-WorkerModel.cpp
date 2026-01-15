@@ -2,6 +2,10 @@
 
 #include <RcppEigen.h>
 
+#include <algorithm>
+
+#include "Utils-Decompositions-utils.h"
+
 namespace CV {
 
 namespace OLS {
@@ -10,17 +14,18 @@ namespace OLS {
 WorkerModel::WorkerModel(const Eigen::Index ncol,
                          const Eigen::Index maxTrainSize,
                          const double threshold)
-    : cod_(maxTrainSize, ncol) {
-  // Threshold at which to consider singular values zero "A pivot will be
+    : qtz_{maxTrainSize, ncol} {
+  // Threshold at which to consider pivots zero "A pivot will be
   // considered nonzero if its absolute value is strictly greater than
   // |pivot|⩽threshold×|maxpivot| "
-  cod_.setThreshold(threshold);
+  qtz_.setThreshold(threshold);
 }
 
 // Copy ctor - required for RcppParallel split
 WorkerModel::WorkerModel(const WorkerModel& other)
-    : cod_(other.cod_.rows(), other.cod_.cols()) {
-  cod_.setThreshold(other.cod_.threshold());
+    : qtz_{other.qtz_.rows(), other.qtz_.cols()} {
+  // Threshold at which to consider pivots zero
+  qtz_.setThreshold(other.qtz_.threshold());
 }
 
 // Compute OLS coefficients using Complete Orthogonal Decomposition
@@ -28,9 +33,9 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                               const Eigen::Ref<const Eigen::VectorXd>& yTrain,
                               Eigen::VectorXd& beta) {
   // Decompose training set into the form XP = QTZ
-  cod_.compute(xTrain);
+  qtz_.compute(xTrain);
 
-  // if (cod_.info() != Eigen::Success) {
+  // if (qtz_.info() != Eigen::Success) {
   //   Not necessary, documentation states this always returns success for COD
   // }
 
@@ -43,118 +48,84 @@ void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
   // Note: While this results in different coefficients for any rank-deficient
   // matrix, out-of-sample predictions will only diverge from R's when
   // the system is underdetermined
-  beta = cod_.solve(yTrain);
+  beta = qtz_.solve(yTrain);
 }
 
 }  // namespace OLS
 
 namespace Ridge {
 
-// Use primal form X'X + lambda * I
-namespace Narrow {
-
 // Main ctor
-WorkerModel::WorkerModel(const Eigen::Index ncol, const double lambda)
-    : ldlt_(ncol),
-      xtxLambda_(ncol, ncol),
+WorkerModel::WorkerModel(const Eigen::Index ncol,
+                         const Eigen::Index maxTrainSize,
+                         const double threshold, const double lambda)
+    : udvT_{maxTrainSize, ncol, Eigen::ComputeThinU | Eigen::ComputeThinV},
+      uTy_{std::min(maxTrainSize, ncol)},
+      singularVals_{std::min(maxTrainSize, ncol)},
+      singularShrinkFactors_{std::min(maxTrainSize, ncol)},
       lambda_{lambda},
-      info_{Eigen::Success} {}
+      info_{Eigen::Success} {
+  // Prescribe threshold to SVD decomposition where singular values are
+  // considered zero "A singular value will be considered nonzero if its value
+  // is strictly greater than |singularvalue|⩽threshold×|maxsingularvalue|."
+  udvT_.setThreshold(threshold);
+}
 
 // Copy ctor - required for RcppParallel split
 WorkerModel::WorkerModel(const WorkerModel& other)
-    : ldlt_(other.ldlt_.cols()),
-      xtxLambda_(other.xtxLambda_.rows(), other.xtxLambda_.cols()),
+    : udvT_{other.udvT_.rows(), other.udvT_.cols(),
+            Eigen::ComputeThinU | Eigen::ComputeThinV},
+      uTy_{other.uTy_.size()},
+      singularVals_{other.singularVals_.size()},
+      singularShrinkFactors_{other.singularShrinkFactors_.size()},
       lambda_{other.lambda_},
-      info_{other.info_} {}
+      info_{other.info_} {
+  // Prescribe threshold to SVD decomposition where singular values are
+  // considered zero
+  udvT_.setThreshold(other.udvT_.threshold());
+}
 
-// Estimate ridge coefficients using LDLT of regularized covariance matrix
+// Estimate ridge coefficients using singular value decomposition
 void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
                               const Eigen::Ref<const Eigen::VectorXd>& yTrain,
                               Eigen::VectorXd& beta) {
-  // Generate regularized covariance matrix
-  xtxLambda_.setZero();
-  xtxLambda_.diagonal().fill(lambda_);
-  const auto xTranspose{xTrain.transpose()};
-  xtxLambda_.selfadjointView<Eigen::Lower>().rankUpdate(xTranspose);
-
-  // beta_ is a misnomer at this point, LDLT supports in-place solving so we
-  // fill beta_ with X'y (the RHS of solve)
-  beta.noalias() = xTranspose * yTrain;
-
-  // Despite positive definiteness, Eigen's documentation states "While the
-  // Cholesky decomposition is particularly useful to solve selfadjoint problems
-  // like D^*D x = b, for that purpose, we recommend the Cholesky decomposition
-  // without square root which is more stable and even faster."
-  ldlt_.compute(xtxLambda_);
+  // Obtain singular value decomposition of the training set
+  udvT_.compute(xTrain);
 
   // Make sure decomposition was successful
-  if (const Eigen::ComputationInfo info{ldlt_.info()}; info != Eigen::Success) {
+  if (const Eigen::ComputationInfo info{udvT_.info()}; info != Eigen::Success) {
     info_ = info;
     return;
   }
 
-  // LDLT::solve supports in-place solves which we use here for efficiency
-  ldlt_.solveInPlace(beta);  // just returns true (no need to check)
+  // The number of singular values may change across folds
+  const Eigen::Index singularValsSize{udvT_.singularValues().size()};
+  // ReSharper disable once CppDFAUnusedValue
+  auto singularVals{singularVals_.head(singularValsSize)};
+  singularVals = Utils::Decompositions::getSingularVals(udvT_);
+
+  // Compute the projection of y
+  auto uTy{uTy_.head(singularValsSize)};
+  uTy.noalias() = udvT_.matrixU().transpose() * yTrain;
+
+  // Apply the shrinkage to the singular values
+  // This function should only be called in the case where lambda > 0 so this is
+  // safe regardless of rank (these shrinkage factors are related to the
+  // coordinate shrinkage factors (d_j^2 / (d_j^2 + lambda)) for solving fitted
+  // values X * beta but are reduced by d_j since we're solving explicitly for
+  // beta)
+  // ReSharper disable once CppDFAUnusedValue
+  auto singularShrinkFactors{singularShrinkFactors_.head(singularValsSize)};
+  singularShrinkFactors =
+      singularVals.array() / (singularVals.array().square() + lambda_);
+
+  // beta_ridge = V * diag(Sigma^2 + lambda * I)^-1 Sigma * U'y
+  beta.noalias() =
+      udvT_.matrixV() * (singularShrinkFactors.array() * uTy.array()).matrix();
 }
 
 // Get decomposition success information
 Eigen::ComputationInfo WorkerModel::getInfo() const noexcept { return info_; }
-
-}  // namespace Narrow
-
-// Use dual form XX' + lambda * I
-namespace Wide {
-
-// Main ctor
-WorkerModel::WorkerModel(const Eigen::Index maxTrainSize, const double lambda)
-    : ldlt_(maxTrainSize),
-      xxtLambda_(maxTrainSize, maxTrainSize),
-      alpha_(maxTrainSize),
-      lambda_{lambda},
-      info_{Eigen::Success} {}
-
-// Copy ctor - required for RcppParallel split
-WorkerModel::WorkerModel(const WorkerModel& other)
-    : ldlt_(other.ldlt_.cols()),
-      xxtLambda_(other.xxtLambda_.rows(), other.xxtLambda_.cols()),
-      alpha_(other.alpha_.size()),
-      lambda_{other.lambda_},
-      info_{other.info_} {}
-
-void WorkerModel::computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
-                              const Eigen::Ref<const Eigen::VectorXd>& yTrain,
-                              Eigen::VectorXd& beta) {
-  // Current fold's training size (we are not guaranteed consistent training
-  // sizes across folds)
-  const Eigen::Index trainSize{xTrain.rows()};
-
-  // Generate regularized outer product
-  auto xxtLambdaBlock{xxtLambda_.topLeftCorner(trainSize, trainSize)};
-  xxtLambdaBlock.setZero();
-  xxtLambdaBlock.diagonal().fill(lambda_);
-  xxtLambdaBlock.selfadjointView<Eigen::Lower>().rankUpdate(xTrain);
-
-  // Decompose regularized outer product (see above in narrow case for why we
-  // use LDLT over LLT)
-  ldlt_.compute(xxtLambdaBlock);
-
-  // Make sure decomposition was successful
-  if (const Eigen::ComputationInfo info{ldlt_.info()}; info != Eigen::Success) {
-    info_ = info;
-    return;
-  }
-
-  // Solve for dual coefficients alpha: (XX' + lambda * I) * alpha = y
-  alpha_.head(trainSize) = ldlt_.solve(yTrain);
-
-  // Map back to primal space: beta = X' * alpha
-  beta.noalias() = xTrain.transpose() * alpha_.head(trainSize);
-}
-
-// Get decomposition success information
-Eigen::ComputationInfo WorkerModel::getInfo() const noexcept { return info_; }
-
-}  // namespace Wide
 
 }  // namespace Ridge
 

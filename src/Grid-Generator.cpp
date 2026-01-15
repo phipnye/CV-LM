@@ -9,11 +9,10 @@
 
 namespace Grid {
 
-Generator::Generator(const double maxLambda, const double precision,
-                     const double threshold)
+Generator::Generator(const double maxLambda, const double precision)
     : maxLambda_{maxLambda},
       precision_{precision},
-      nFull_{[&]() {
+      nFull_{[&]() -> Eigen::Index {
         // These checks are already implemented in R, but we add them
         // here to double check because the overhead is small and the
         // consequences can be large
@@ -21,23 +20,37 @@ Generator::Generator(const double maxLambda, const double precision,
           Rcpp::stop("Precision must be > 0");
         }
 
+        if (maxLambda <= 0.0) {
+          Rcpp::stop("Lambda must be > 0");
+        }
+
+        // Make sure we can fit the grid size in an Eigen::Index object
         const double rawN{std::floor(maxLambda / precision)};
 
-        // Make sure we still have space for size() calls
-        constexpr double rawLimit{
-            static_cast<double>(std::numeric_limits<Eigen::Index>::max()) -
-            2.0};
+        // Determine the absolute ceiling for the grid size.
+        // We subtract 2.0 to account for nFull_ + 1 + hasTail_ without
+        // overflow.
+        constexpr double limitEigen{
+            static_cast<double>(std::numeric_limits<Eigen::Index>::max())};
+        constexpr double limitSizeT{
+            static_cast<double>(std::numeric_limits<std::size_t>::max())};
 
-        if (rawN >= rawLimit) {
+        // Limit the grid size (this is important because we parallelize over
+        // values of lambda for deterministic cv methods, requiring the ability
+        // to cast the size to a std::size_t without overflow
+        if (constexpr double safetyLimit{std::min(limitEigen, limitSizeT) -
+                                         2.0};
+            rawN >= safetyLimit) {
           Rcpp::stop(
-              "Grid size is too large. Exceeds Eigen::Index limits. Try "
-              "increasing precision or reducing max lambda.");
+              "Grid size is too large. Try increasing precision or reducing "
+              "max lambda.");
         }
 
         return static_cast<Eigen::Index>(rawN);
       }()},
-      hasTail_{(maxLambda - (static_cast<double>(nFull_) * precision)) >
-               threshold} {}
+
+      // We explicitly force the max lambda to be included in the grid search
+      hasTail_{(maxLambda > (static_cast<double>(nFull_) * precision))} {}
 
 Eigen::Index Generator::size() const noexcept { return nFull_ + 1 + hasTail_; }
 

@@ -13,7 +13,7 @@ class WorkerModel {
 
  private:
   // Members
-  Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod_;
+  Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> qtz_;
 
  public:
   // Main ctor
@@ -33,24 +33,24 @@ class WorkerModel {
 
 namespace Ridge {
 
-// Use primal form
-namespace Narrow {
-
 class WorkerModel {
  public:
   // Flag indicating whether the decomposition can fail
-  static constexpr bool canFail{true};  // ldlt can fail because of a zero pivot
+  static constexpr bool canFail{true};  // BDCSVD can fail
 
  private:
   // Members
-  Eigen::LDLT<Eigen::MatrixXd> ldlt_;
-  Eigen::MatrixXd xtxLambda_;
+  Eigen::BDCSVD<Eigen::MatrixXd> udvT_;
+  Eigen::VectorXd uTy_;
+  Eigen::VectorXd singularVals_;
+  Eigen::VectorXd singularShrinkFactors_;
   const double lambda_;
   Eigen::ComputationInfo info_;
 
  public:
   // Main ctor
-  explicit WorkerModel(Eigen::Index ncol, double lambda);
+  explicit WorkerModel(Eigen::Index ncol, Eigen::Index maxTrainSize,
+                       double threshold, double lambda);
 
   // Copy ctor for worker splits
   WorkerModel(const WorkerModel& other);
@@ -63,42 +63,6 @@ class WorkerModel {
   // Get decomposition success info
   [[nodiscard]] Eigen::ComputationInfo getInfo() const noexcept;
 };
-
-}  // namespace Narrow
-
-namespace Wide {
-
-class WorkerModel {
- public:
-  // Flag indicating whether the decomposition can fail
-  static constexpr bool canFail{true};  // ldlt can fail because of a zero pivot
-
- private:
-  // Members
-  Eigen::LDLT<Eigen::MatrixXd> ldlt_;
-  Eigen::MatrixXd xxtLambda_;
-  Eigen::VectorXd alpha_;  // additional data buffer for dual coefficients where
-                           // beta = X' * alpha
-  const double lambda_;
-  Eigen::ComputationInfo info_;
-
- public:
-  // Main ctor
-  explicit WorkerModel(Eigen::Index maxTrainSize, double lambda);
-
-  // Copy ctor for worker splits
-  WorkerModel(const WorkerModel& other);
-
-  // Fit ridge regression coefficients to training set
-  void computeBeta(const Eigen::Ref<const Eigen::MatrixXd>& xTrain,
-                   const Eigen::Ref<const Eigen::VectorXd>& yTrain,
-                   Eigen::VectorXd& beta);
-
-  // Get decomposition success info
-  [[nodiscard]] Eigen::ComputationInfo getInfo() const noexcept;
-};
-
-}  // namespace Wide
 
 }  // namespace Ridge
 

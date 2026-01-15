@@ -8,29 +8,29 @@
 
 #include "Grid-Generator.h"
 #include "Grid-LambdaCV.h"
+#include "Utils-Folds-utils.h"
 
 namespace Grid::Stochastic {
 
 class Worker : public RcppParallel::Worker {
   // Pre-allocate for SVD
-  Eigen::BDCSVD<Eigen::MatrixXd> svd_;
+  Eigen::BDCSVD<Eigen::MatrixXd> udvT_;
 
   // Accumulator (vector of MSEs - one per lambda)
   Eigen::VectorXd cvs_;
 
   // Thread-specific data buffers
-  Eigen::VectorXd uty_;
+  Eigen::VectorXd uTy_;
   Eigen::VectorXd beta_;
   Eigen::VectorXd resid_;
-  Eigen::ArrayXd eigenVals_;
-  Eigen::ArrayXd eigenValsSq_;
-  Eigen::ArrayXd diagW_;
+  Eigen::VectorXd singularVals_;
+  Eigen::VectorXd singularValsSq_;
+  Eigen::VectorXd singularShrinkFactors_;
   Eigen::VectorXi trainIdxs_;
   Eigen::VectorXi testIdxs_;
 
   // References
-  const Eigen::VectorXi& testFoldIDs_;
-  const Eigen::VectorXi& testFoldSizes_;
+  const Utils::Folds::FoldInfo& foldInfo_;
   const Eigen::Map<Eigen::VectorXd>& y_;
   const Eigen::Map<Eigen::MatrixXd>& x_;
   const Generator& lambdasGrid_;
@@ -45,10 +45,8 @@ class Worker : public RcppParallel::Worker {
   // Main tor
   explicit Worker(const Eigen::Map<Eigen::VectorXd>& y,
                   const Eigen::Map<Eigen::MatrixXd>& x,
-                  const Eigen::VectorXi& testFoldIDs,
-                  const Eigen::VectorXi& testFoldSizes,
-                  const Generator& lambdasGrid, Eigen::Index maxTrainSize,
-                  Eigen::Index maxTestSize, double threshold);
+                  const Utils::Folds::FoldInfo& foldInfo,
+                  const Generator& lambdasGrid, double threshold);
 
   // Split ctor
   Worker(const Worker& other, RcppParallel::Split);
@@ -65,12 +63,14 @@ class Worker : public RcppParallel::Worker {
   void join(const Worker& other);
 
   // Member access
-  LambdaCV getOptimalPair() const;
+  [[nodiscard]] LambdaCV getOptimalPair() const;
 
  private:
   // Evalutate out-of-sample performance
-  void evalTestMSE(Eigen::Index lambdaIdx, Eigen::Index testSize,
-                   const Eigen::MatrixXd& v, double wt);
+  void evalTestMSE(
+      const Eigen::Ref<const Eigen::VectorXd>& uTy,
+      const Eigen::Ref<const Eigen::VectorXd>& singularShrinkFactors,
+      Eigen::Index lambdaIdx, Eigen::Index testSize, double wt);
 };
 
-};  // namespace Grid::Stochastic
+}  // namespace Grid::Stochastic

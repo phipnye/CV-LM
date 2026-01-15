@@ -29,17 +29,20 @@ is.wholenumber <- function(x, tol = .Machine$double.eps^0.5) {
 
 .assert_integer_scalar <- function(x, name, nonneg = FALSE) {
   .assert_scalar(x, is.wholenumber, name)
+  x <- as.integer(x)
 
-  if (nonneg && x < 0) {
+  if (nonneg && x < 0L) {
     stop(sprintf("Argument '%s' must be non-negative.", name), call. = FALSE)
   }
 
   if (!is.finite(x)) {
-    stop(sprintf("Argument '%s' must be finite.", name), call. = FALSE)
+    stop(
+      sprintf("Argument '%s' must be finite and fit in an integer.", name),
+      call. = FALSE
+    )
   }
 
-  # Return as integer
-  as.integer(x)
+  x
 }
 
 .assert_double_scalar <- function(x, name, nonneg = FALSE) {
@@ -113,18 +116,14 @@ is.wholenumber <- function(x, tol = .Machine$double.eps^0.5) {
 }
 
 .assert_valid_kvals <- function(K.vals, n) {
-  # Check numerical integrity (no NA, NaN, or Inf)
-  if (!all(is.finite(K.vals))) {
-    stop(
-      "Specified number of folds contains invalid values (NA, NaN, or Inf).",
-      call. = FALSE
-    )
-  }
-
   # Confirm integer values
-  if (any(!is.wholenumber(K.vals))) {
-    stop("Number of folds should be integer values.", call. = FALSE)
-  }
+  K.vals <- vapply(
+    as.vector(K.vals),
+    .assert_integer_scalar,
+    integer(1L),
+    name = "K.val",
+    USE.NAMES = FALSE
+  )
 
   # Make sure number of folds between 2 and n
   if (any(K.vals < 2L)) {
@@ -139,7 +138,7 @@ is.wholenumber <- function(x, tol = .Machine$double.eps^0.5) {
   }
 
   # Return unique and as integer
-  unique(as.integer(K.vals))
+  unique(K.vals)
 }
 
 .assert_valid_threads <- function(n.threads) {

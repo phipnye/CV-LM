@@ -3,10 +3,11 @@
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
+#include <cmath>
 #include <cstddef>
-#include <limits>
 #include <utility>
 
+#include "Constants.h"
 #include "Grid-Generator.h"
 #include "Grid-LambdaCV.h"
 
@@ -18,45 +19,24 @@ class Worker : public RcppParallel::Worker {
   // Policy (owns all calculation-specific data)
   WorkerPolicy policy_;
 
-  // Thread-local buffer for repeated denominator computations
-  Eigen::ArrayXd denom_;
-
   // Reduction result: (corresponding lambda, best CV)
   LambdaCV optimalPair_;
 
   // References
   const Generator& lambdasGrid_;
-  const Eigen::ArrayXd& eigenValsSq_;
-
-  // Scalars
-  const Eigen::Index nrow_;
-
-  // Flag for whether data was centered in R
-  const bool centered_;
 
  public:
   // Main ctor
-  explicit Worker(const Generator& lambdasGrid,
-                  const Eigen::ArrayXd& eigenValsSq, const Eigen::Index nrow,
-                  const bool centered, WorkerPolicy policy)
+  explicit Worker(const Generator& lambdasGrid, WorkerPolicy policy)
       : policy_{std::move(policy)},
-        denom_(eigenValsSq.size()),
         // [lambda, CV] - no designated initializer in C++17
-        optimalPair_{0.0, std::numeric_limits<double>::infinity()},
-        lambdasGrid_{lambdasGrid},
-        eigenValsSq_{eigenValsSq},
-        nrow_{nrow},
-        centered_{centered} {}
-
+        optimalPair_{0.0, Constants::Inf},
+        lambdasGrid_{lambdasGrid} {}
   // Split ctor
   explicit Worker(const Worker& other, const RcppParallel::Split)
       : policy_{other.policy_},
-        denom_(other.denom_.size()),
-        optimalPair_{0.0, std::numeric_limits<double>::infinity()},
-        lambdasGrid_{other.lambdasGrid_},
-        eigenValsSq_{other.eigenValsSq_},
-        nrow_{other.nrow_},
-        centered_{other.centered_} {}
+        optimalPair_{0.0, Constants::Inf},
+        lambdasGrid_{other.lambdasGrid_} {}
 
   // parallelReduce work operator
   void operator()(const std::size_t begin, const std::size_t end) override {
@@ -66,15 +46,11 @@ class Worker : public RcppParallel::Worker {
       // Retrieve next lambda value from the generator
       const double lambda{lambdasGrid_[lambdaIdx]};
 
-      // denom_ is reused to avoid temporary allocations and repeated
-      // computations (it is the denominator of df(lambda) in ESL p. 68)
-      denom_ = eigenValsSq_ + lambda;
-
       // Calculate GCV or LOOCV
-      const double cv{
-          policy_.computeCV(lambda, denom_, eigenValsSq_, nrow_, centered_)};
-
-      if (cv < optimalPair_.cv) {
+      if (const double cv{policy_.computeCV(lambda)};
+          // IEEE 754 technically evaluates < to false for NaN but added here
+          // for precaution
+          cv < optimalPair_.cv && !std::isnan(cv)) {
         optimalPair_.cv = cv;
         optimalPair_.lambda = lambda;
       }

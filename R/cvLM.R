@@ -33,13 +33,13 @@
   # Number of threads (-1 -> defaultNumThreads)
   n.threads <- .assert_valid_threads(n.threads)
 
-  # Threshold for QR decomposition (and at which to consider lambda 0 for OLS)
+  # Threshold for complete orthogonal decomposition
   tol <- .assert_double_scalar(tol, "tol", nonneg = TRUE)
 
   # Whether to penalize the intercept coefficient in the case of ridge regression
   centered <- FALSE
 
-  if (lambda > tol) {
+  if (lambda > 0) {
     .assert_logical_scalar(penalize.intercept, "penalize.intercept")
 
     # We only center if it's a ridge regression model with an intercept

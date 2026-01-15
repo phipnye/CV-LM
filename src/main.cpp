@@ -1,16 +1,19 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
 
-#include <limits>
-
-#include "CV-OLS-Fit.h"
-#include "CV-Ridge-Fit.h"
-#include "CV-Utils-utils.h"
-#include "CV-WorkerModel.h"
 #include "CV-engine.h"
+#include "Enums-enums.h"
 #include "Grid-Generator.h"
 #include "Grid-LambdaCV.h"
 #include "Grid-engine.h"
+#include "Utils-Folds-utils.h"
+
+// Enforce IEEE 754 / IEC 559 compliance ("All R platforms are required to work
+// with values conforming to the IEC 60559 (also known as IEEE 754) standard" -
+// https://stat.ethz.ch/R-manual/R-devel/library/base/html/double.html)
+static_assert(
+    std::numeric_limits<double>::is_iec559,
+    "Full IEC 60559 (IEEE 754) compliance is required for this R package.");
 
 // [[Rcpp::export(name="cv.lm.rcpp")]]
 double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y,
@@ -20,12 +23,19 @@ double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y,
                 const bool centered) {
   // Determine which type of model we're fitting (this has potentially important
   // implications since OLS uses complete orthogonal decomposition whereas ridge
-  // regression uses cholesky
-  const bool useOLS{lambda <= threshold};
-  
+  // regression uses singular value decomposition (we also safe-guard against
+  // negative values which should be handled in R but is added here as a
+  // precaution)
+  const bool useOLS{lambda <= 0.0};
+
+  // Skip checking number of folds if we're using generalized CV
   if (generalized) {
-    return useOLS ? CV::gcv<CV::OLS::Fit>(y, x, threshold)
-                  : CV::gcv<CV::Ridge::Fit>(y, x, lambda, centered);
+    using CV::Deterministic::computeCV;
+    return useOLS
+               ? computeCV<Enums::FitMethod::OLS, Enums::AnalyticMethod::GCV>(
+                     y, x, threshold)
+               : computeCV<Enums::FitMethod::Ridge, Enums::AnalyticMethod::GCV>(
+                     y, x, threshold, lambda, centered);
   }
 
   // https://cran.r-project.org/doc/manuals/r-release/R-ints.html
@@ -35,31 +45,27 @@ double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y,
   // than 2^31-1."
   const int nrow{static_cast<int>(x.rows())};
 
-  // Preparation: Determine a valid number of folds as close to the passed
-  // argument as possible
-  const int k{CV::Utils::kCheck(nrow, k0)};
+  // Determine a valid number of folds as close to the passed K argument as
+  // possible
+  const int k{Utils::Folds::kCheck(nrow, k0)};
 
   // LOOCV
   if (k == nrow) {
-    return useOLS ? CV::loocv<CV::OLS::Fit>(y, x, threshold)
-                  : CV::loocv<CV::Ridge::Fit>(y, x, lambda, centered);
+    using CV::Deterministic::computeCV;
+    return useOLS
+               ? computeCV<Enums::FitMethod::OLS, Enums::AnalyticMethod::LOOCV>(
+                     y, x, threshold)
+               : computeCV<Enums::FitMethod::Ridge,
+                           Enums::AnalyticMethod::LOOCV>(y, x, threshold,
+                                                         lambda, centered);
   }
 
   // K-fold CV
-  if (useOLS) {
-    return CV::parCV<CV::OLS::WorkerModel>(y, x, k, seed, nThreads, threshold);
-  }
-
-  // Dispatch based on dimensionality (use dual form only if ncol strictly
-  // exceeds the largest training size)
-  if (x.cols() > (nrow - (nrow / k))) {
-    return CV::parCV<CV::Ridge::Wide::WorkerModel>(y, x, k, seed, nThreads,
-                                                   lambda);
-  }
-
-  // Otherwise, use primal form
-  return CV::parCV<CV::Ridge::Narrow::WorkerModel>(y, x, k, seed, nThreads,
-                                                   lambda);
+  using CV::Stochastic::computeCV;
+  return useOLS ? computeCV<Enums::FitMethod::OLS>(y, x, k, seed, nThreads,
+                                                   threshold)
+                : computeCV<Enums::FitMethod::Ridge>(y, x, k, seed, nThreads,
+                                                     threshold, lambda);
 }
 
 // [[Rcpp::export(name="grid.search.rcpp")]]
@@ -70,33 +76,27 @@ Rcpp::List gridSearch(const Eigen::Map<Eigen::VectorXd> y,
                       const int nThreads, const double threshold,
                       const bool centered) {
   // Lightweight generator for creating lambda values
-  const Grid::Generator lambdasGrid{maxLambda, precision, threshold};
-
-  // Limit the grid size (2^32 max)
-  if (lambdasGrid.size() > (1LL << 32)) {
-    Rcpp::stop(
-        "Lambda grid is too large. Please limit search size to something less "
-        "than 2^32.");
-  }
+  const Grid::Generator lambdasGrid{maxLambda, precision};
 
   // Optimal CV results in the form [CV, lambda]
-  Grid::LambdaCV optimalPair;
+  Grid::LambdaCV optimalPair{};
 
   // Generalized CV
   if (generalized) {
-    optimalPair = Grid::gcv(y, x, lambdasGrid, nThreads, threshold, centered);
+    optimalPair = Grid::Deterministic::search<Enums::AnalyticMethod::GCV>(
+        y, x, lambdasGrid, nThreads, threshold, centered);
   } else {
-    // Determine a valid number of folds as close to the passed argument as
-    // possible
-    const int nrow{
-        static_cast<int>(x.rows())};  // safe (cannot exceed 2^31 - 1)
+    // Determine a valid number of folds as close to the passed K as possible
+    const int nrow{static_cast<int>(x.rows())};
 
     // Leave-one-out CV
-    if (const int k{CV::Utils::kCheck(nrow, k0)}; k == nrow) {
-      optimalPair =
-          Grid::loocv(y, x, lambdasGrid, nThreads, threshold, centered);
-    } else {  // K-fold CV
-      optimalPair = Grid::kcv(y, x, k, lambdasGrid, seed, nThreads, threshold);
+    if (const int k{Utils::Folds::kCheck(nrow, k0)}; k == nrow) {
+      optimalPair = Grid::Deterministic::search<Enums::AnalyticMethod::LOOCV>(
+          y, x, lambdasGrid, nThreads, threshold, centered);
+    } else {
+      // K-fold CV
+      optimalPair = Grid::Stochastic::search(y, x, k, lambdasGrid, seed,
+                                             nThreads, threshold);
     }
   }
 

@@ -19,7 +19,7 @@ grid.search <- function(
   # --- Extract data
 
   mf <- match.call(expand.dots = FALSE)
-  m <- match(c("object", "data", "subset", "na.action"), names(mf), 0L)
+  m <- match(c("formula", "data", "subset", "na.action"), names(mf), 0L)
   mf <- mf[c(1L, m)]
   mf$drop.unused.levels <- TRUE
   mf[[1L]] <- quote(stats::model.frame)
@@ -47,7 +47,7 @@ grid.search <- function(
   # Number of threads (-1 -> defaultNumThreads)
   n.threads <- .assert_valid_threads(n.threads)
 
-  # Threshold for SVD decomposition (and tolerance at which we force inclusion of max.lambda)
+  # Threshold for SVD decomposition
   tol <- .assert_double_scalar(tol, "tol", nonneg = TRUE)
 
   # Maximum lambda to check

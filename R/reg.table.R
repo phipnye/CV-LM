@@ -253,10 +253,10 @@ reg.table <- function(
   if (length(cv.args$K.vals) > 1L) {
     stop("Argument 'K.vals' must be a single integer value.", call. = FALSE)
   }
-  
+
   # TO DO: Add warnings for when model statistics won't align with CV results (like introducing a lambda > 0
   # on a linear model)
-  
+
   vapply(
     model.chunks,
     TBL.FUN,
