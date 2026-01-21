@@ -62,8 +62,13 @@ is.wholenumber <- function(x, tol = .Machine$double.eps^0.5) {
 
 .assert_valid_data <- function(y, X) {
   # X must be a matrix
-  if (!is.matrix(X)) {
-    stop("The design matrix must be a matrix.", call. = FALSE)
+  if (!is.matrix(X) || !is.double(X)) {
+    stop("The design matrix must be a numeric matrix.", call. = FALSE)
+  }
+  
+  # y must be a vector
+  if (!is.atomic(y) || !is.double(y)) {
+    stop("The response vector must be a numeric vector", call. = FALSE)
   }
 
   pred.nrow <- nrow(X)
@@ -79,15 +84,6 @@ is.wholenumber <- function(x, tol = .Machine$double.eps^0.5) {
       ),
       call. = FALSE
     )
-  }
-
-  # Ensure data consist of doubles
-  if (!is.double(y)) {
-    stop("The outcome variable must be numeric.", call. = FALSE)
-  }
-
-  if (!is.double(X)) {
-    stop("The design matrix must be numeric.", call. = FALSE)
   }
 
   # Check numerical integrity (no NA, NaN, or Inf)

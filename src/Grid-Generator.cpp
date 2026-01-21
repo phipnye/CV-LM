@@ -12,7 +12,9 @@ namespace Grid {
 Generator::Generator(const double maxLambda, const double precision)
     : maxLambda_{maxLambda},
       precision_{precision},
-      nFull_{[&]() -> Eigen::Index {
+
+      // The number of points between 0 and max lambda
+      internalN{[&]() -> Eigen::Index {
         // These checks are already implemented in R, but we add them
         // here to double check because the overhead is small and the
         // consequences can be large
@@ -27,9 +29,8 @@ Generator::Generator(const double maxLambda, const double precision)
         // Make sure we can fit the grid size in an Eigen::Index object
         const double rawN{std::floor(maxLambda / precision)};
 
-        // Determine the absolute ceiling for the grid size.
-        // We subtract 2.0 to account for nFull_ + 1 + hasTail_ without
-        // overflow.
+        // Determine the absolute ceiling for the grid size (subtract 2.0 to
+        // account for internalN + 1 + hasTail_ without overflow)
         constexpr double limitEigen{
             static_cast<double>(std::numeric_limits<Eigen::Index>::max())};
         constexpr double limitSizeT{
@@ -50,11 +51,14 @@ Generator::Generator(const double maxLambda, const double precision)
       }()},
 
       // We explicitly force the max lambda to be included in the grid search
-      hasTail_{(maxLambda > (static_cast<double>(nFull_) * precision))} {}
+      hasTail_{(maxLambda > (static_cast<double>(internalN) * precision))} {}
 
-Eigen::Index Generator::size() const noexcept { return nFull_ + 1 + hasTail_; }
+Eigen::Index Generator::size() const noexcept {
+  // Plus 1 for zero
+  return internalN + 1 + hasTail_;
+}
 
-double Generator::operator[](const Eigen::Index idx) const {
+double Generator::operator[](const Eigen::Index idx) const noexcept {
   return std::min(static_cast<double>(idx) * precision_, maxLambda_);
 }
 

@@ -8,11 +8,11 @@
 
 #include "CV-OLS-Fit.h"
 #include "CV-Ridge-Fit.h"
-#include "CV-Worker.h"
-#include "CV-WorkerModel.h"
-#include "Enums-enums.h"
-#include "Utils-Folds-utils.h"
-#include "Utils-Parallel-utils.h"
+#include "CV-Stochastic-Worker.h"
+#include "CV-Stochastic-WorkerModel.h"
+#include "Enums.h"
+#include "Utils-Folds.h"
+#include "Utils-Parallel.h"
 
 namespace CV {
 
@@ -20,20 +20,19 @@ namespace Deterministic {
 
 // Generalized and leave-one-out cross-validation for linear and ridge
 // regression
-template <Enums::FitMethod FitType, Enums::AnalyticMethod CVMethod,
-          typename... RidgeArgs>
+template <Enums::FitMethod Fit, Enums::AnalyticMethod Analytic,
+          Enums::CenteringMethod Centering, typename... Lambda>
 [[nodiscard]] double computeCV(const Eigen::Map<Eigen::VectorXd>& y,
                                const Eigen::Map<Eigen::MatrixXd>& x,
-                               const double threshold,
-                               RidgeArgs&&... ridgeArgs) {
+                               const double threshold, Lambda&&... lambda) {
   // Generate an OLS or Ridge Fit object for computing closed-form CV solutions
   const auto fit{[&]() {
-    if constexpr (FitType == Enums::FitMethod::OLS) {
-      return OLS::Fit<CVMethod>{y, x, threshold};
+    if constexpr (Fit == Enums::FitMethod::OLS) {
+      return OLS::Fit<Analytic, Centering>{y, x, threshold};
     } else {
-      Enums::assertExpected<FitType, Enums::FitMethod::Ridge>();
-      return Ridge::Fit<CVMethod>{y, x, threshold,
-                                  std::forward<RidgeArgs>(ridgeArgs)...};
+      Enums::assertExpected<Fit, Enums::FitMethod::Ridge>();
+      return Ridge::Fit<Analytic, Centering>{y, x, threshold,
+                                             std::forward<Lambda>(lambda)...};
     }
   }()};
 
@@ -45,7 +44,8 @@ template <Enums::FitMethod FitType, Enums::AnalyticMethod CVMethod,
 namespace Stochastic {
 
 // Multi-threaded K-fold CV for linear and ridge regression
-template <Enums::FitMethod FitType, typename... Lambda>
+template <Enums::FitMethod Fit, Enums::CenteringMethod Centering,
+          typename... Lambda>
 [[nodiscard]] double computeCV(const Eigen::Map<Eigen::VectorXd>& y,
                                const Eigen::Map<Eigen::MatrixXd>& x,
                                const int k, const int seed, const int nThreads,
@@ -58,12 +58,13 @@ template <Enums::FitMethod FitType, typename... Lambda>
   // coefficients and decompostions depending on whether we're using OLS or
   // ridge regression
   auto worker{[&]() {
-    if constexpr (FitType == Enums::FitMethod::OLS) {
-      return Worker<OLS::WorkerModel>{y, x, foldInfo, threshold};
+    if constexpr (Fit == Enums::FitMethod::OLS) {
+      // Enums::assertExpected<Centering, Enums::CenteringMethod::None>();
+      return Worker<OLS::WorkerModel, Centering>{y, x, foldInfo, threshold};
     } else {
-      Enums::assertExpected<FitType, Enums::FitMethod::Ridge>();
-      return Worker<Ridge::WorkerModel>{y, x, foldInfo, threshold,
-                                        std::forward<Lambda>(lambda)...};
+      Enums::assertExpected<Fit, Enums::FitMethod::Ridge>();
+      return Worker<Ridge::WorkerModel, Centering>{
+          y, x, foldInfo, threshold, std::forward<Lambda>(lambda)...};
     }
   }()};
 

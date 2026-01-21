@@ -1,7 +1,7 @@
-#include "Utils-Decompositions-utils.h"
-
 #include <Rcpp.h>
 #include <RcppEigen.h>
+
+#include "Utils-Decompositions.h"
 
 namespace Utils::Decompositions {
 
@@ -44,6 +44,14 @@ Eigen::VectorXd getSingularVals(const Eigen::BDCSVD<Eigen::MatrixXd>& udvT) {
   const Eigen::Index rank{udvT.rank()};
   singularVals.head(rank) = origSingularVals.head(rank);
   return singularVals;
+}
+
+// Retrieve properly zeroed-out singular values into a pre-allocated bu
+void getSingularVals(const Eigen::BDCSVD<Eigen::MatrixXd>& udvT,
+                     Eigen::VectorXd& singularVals) {
+  const Eigen::Index rank{udvT.rank()};
+  singularVals.setZero();
+  singularVals.head(rank) = udvT.singularValues().head(rank);
 }
 
 }  // namespace Utils::Decompositions

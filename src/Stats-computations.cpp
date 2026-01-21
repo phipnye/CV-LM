@@ -4,8 +4,6 @@
 
 #include <algorithm>
 
-#include "Constants.h"
-
 namespace Stats {
 
 // GCV = MSE / (1 - trace(H)/n)^2

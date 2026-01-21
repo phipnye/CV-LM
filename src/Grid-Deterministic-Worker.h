@@ -14,10 +14,10 @@
 namespace Grid::Deterministic {
 
 // Class for searching grid of deterministic CV (LOOCV and GCV) results
-template <typename WorkerPolicy>
+template <typename WorkerModel>
 class Worker : public RcppParallel::Worker {
-  // Policy (owns all calculation-specific data)
-  WorkerPolicy policy_;
+  // Model (owns all calculation-specific data)
+  WorkerModel model_;
 
   // Reduction result: (corresponding lambda, best CV)
   LambdaCV optimalPair_;
@@ -27,30 +27,29 @@ class Worker : public RcppParallel::Worker {
 
  public:
   // Main ctor
-  explicit Worker(const Generator& lambdasGrid, WorkerPolicy policy)
-      : policy_{std::move(policy)},
+  explicit Worker(const Generator& lambdasGrid, WorkerModel model)
+      : model_{std::move(model)},
         // [lambda, CV] - no designated initializer in C++17
         optimalPair_{0.0, Constants::Inf},
         lambdasGrid_{lambdasGrid} {}
+
   // Split ctor
   explicit Worker(const Worker& other, const RcppParallel::Split)
-      : policy_{other.policy_},
+      : model_{other.model_},
         optimalPair_{0.0, Constants::Inf},
         lambdasGrid_{other.lambdasGrid_} {}
 
   // parallelReduce work operator
   void operator()(const std::size_t begin, const std::size_t end) override {
-    for (Eigen::Index lambdaIdx{static_cast<Eigen::Index>(begin)},
-         endIdx{static_cast<Eigen::Index>(end)};
+    const Eigen::Index endIdx{static_cast<Eigen::Index>(end)};
+
+    for (Eigen::Index lambdaIdx{static_cast<Eigen::Index>(begin)};
          lambdaIdx < endIdx; ++lambdaIdx) {
       // Retrieve next lambda value from the generator
       const double lambda{lambdasGrid_[lambdaIdx]};
 
-      // Calculate GCV or LOOCV
-      if (const double cv{policy_.computeCV(lambda)};
-          // IEEE 754 technically evaluates < to false for NaN but added here
-          // for precaution
-          cv < optimalPair_.cv && !std::isnan(cv)) {
+      // Calculate GCV or LOOCV (IEEE 754 evaluates < to false for NaN)
+      if (const double cv{model_.computeCV(lambda)}; cv < optimalPair_.cv) {
         optimalPair_.cv = cv;
         optimalPair_.lambda = lambda;
       }

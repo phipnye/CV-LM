@@ -14,7 +14,7 @@ grid.search <- function(
   tol = 1e-7,
   max.lambda = 10000,
   precision = 0.1,
-  penalize.intercept = FALSE
+  center = TRUE
 ) {
   # --- Extract data
 
@@ -56,17 +56,13 @@ grid.search <- function(
   # Precision / step size
   precision <- .assert_double_scalar(precision, "precision", nonneg = TRUE)
 
-  # Whether to penalize the intercept coefficient in the case of ridge regression
-  .assert_logical_scalar(penalize.intercept, "penalize.intercept")
+  # Whether to center the data - affecting whether the intercept term is penalized or not in the case of 
+  # ridge regression (can also provide different numbers for undetermined OLS cases)
+  .assert_logical_scalar(center, "center")
 
-  # We only center if it's a ridge regression model with an intercept
-  centered <- !penalize.intercept && attr(mt, "intercept") == 1L
-
-  # Center the data and drop the intercept column
-  if (centered) {
-    tmp <- .center_data(y, X, mt)
-    y <- tmp$y
-    X <- tmp$X
+  # Drop the intercept term if we're centering the data
+  if (center && attr(mt, "intercept") == 1L) {
+    X <- .drop_intercept(X)
   }
 
   # Check for valid regression data before passing to C++
@@ -81,6 +77,6 @@ grid.search <- function(
     seed = seed,
     nThreads = n.threads,
     threshold = tol,
-    centered = centered
+    center = center
   )
 }

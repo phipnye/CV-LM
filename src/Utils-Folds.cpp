@@ -1,10 +1,11 @@
-#include "Utils-Folds-utils.h"
-
 #include <Rcpp.h>
 #include <RcppEigen.h>
 
 #include <cfenv>
 #include <cmath>
+#include <tuple>
+
+#include "Utils-Folds.h"
 
 namespace Utils::Folds {
 
@@ -19,9 +20,9 @@ ScopedRoundingMode::~ScopedRoundingMode() { std::fesetround(oldMode_); }
 // Confirm valid value for K
 // Mimics boot::cv.glm logic to find a K that evenly (or nearly evenly) divides
 // n (uses FE_TONEAREST to match R's banker rounding)
-int kCheck(const int nrow, const int k0) {
-  // LOOCV
-  if (nrow == k0) {
+int kCheck(const int nrow, const int k0, const bool generalized) {
+  // GCV or LOOCV
+  if (generalized || nrow == k0) {
     return k0;
   }
 
@@ -73,8 +74,7 @@ FoldInfo::FoldInfo(const int seed, const int nrow, const int k)
         // reproducibility)
         const Rcpp::Function setSeed{"set.seed"};
         const Rcpp::Function sampleR{"sample"};
-        // ReSharper disable once CppExpressionWithoutSideEffects
-        setSeed(seed);
+        std::ignore = setSeed(seed);  // returns NULL that we can ignore
 
         /*
          * Replicate fold assignment from boot::cv.glm:
@@ -97,11 +97,11 @@ FoldInfo::FoldInfo(const int seed, const int nrow, const int k)
         // limited to 32-bit values so VectorXi is safe here
         Eigen::VectorXi testFoldSizes{Eigen::VectorXi::Zero(k)};
 
-        // Store test fold sizes to calculate the weighted CV estimate: sum((n_i
-        // / n)
-        // * cost_i)
-        for (Eigen::Index idx{0}, size{testFoldIDs_.size()}; idx < size;
-             ++idx) {
+        // Store test fold sizes to calculate the weighted CV estimate:
+        // sum((n_i / n) * cost_i)
+        const Eigen::Index size{testFoldIDs_.size()};
+
+        for (Eigen::Index idx{0}; idx < size; ++idx) {
           ++testFoldSizes[testFoldIDs_[idx]];
         }
 

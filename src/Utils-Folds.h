@@ -18,7 +18,7 @@ class ScopedRoundingMode {
 };
 
 // Confirm valid value for the number of folds
-[[nodiscard]] int kCheck(int nrow, int k0);
+[[nodiscard]] int kCheck(int nrow, int k0, bool generalized);
 
 // Container for holding assigned fold information
 struct FoldInfo {

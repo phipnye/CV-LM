@@ -12,8 +12,7 @@
   seed,
   n.threads,
   tol,
-  penalize.intercept,
-  has.intercept,
+  center,
   mt
 ) {
   # --- Confirm validity of arguments
@@ -35,22 +34,14 @@
 
   # Threshold for complete orthogonal decomposition
   tol <- .assert_double_scalar(tol, "tol", nonneg = TRUE)
-
-  # Whether to penalize the intercept coefficient in the case of ridge regression
-  centered <- FALSE
-
-  if (lambda > 0) {
-    .assert_logical_scalar(penalize.intercept, "penalize.intercept")
-
-    # We only center if it's a ridge regression model with an intercept
-    centered <- !penalize.intercept && has.intercept
-
-    # Center the data and drop the intercept column
-    if (centered) {
-      tmp <- .center_data(y, X, mt)
-      y <- tmp$y
-      X <- tmp$X
-    }
+  
+  # Whether to center the data - affecting whether the intercept term is penalized or not in the case of 
+  # ridge regression (can also provide different numbers for undetermined OLS cases)
+  .assert_logical_scalar(center, "center")
+  
+  # Drop the intercept term if we're centering the data
+  if (center && attr(mt, "intercept") == 1L) {
+    X <- .drop_intercept(X)
   }
 
   # Check for valid regression data before passing to C++
@@ -69,7 +60,7 @@
         seed = seed,
         nThreads = min(K, n.threads),
         threshold = tol,
-        centered = centered
+        center = center
       )
     },
     numeric(1L),
@@ -93,7 +84,7 @@ cvLM.formula <- function(
   seed = 1L,
   n.threads = 1L,
   tol = 1e-7,
-  penalize.intercept = FALSE,
+  center = FALSE,
   ...
 ) {
   # --- Extract data (mimic lm behavior)
@@ -123,8 +114,7 @@ cvLM.formula <- function(
     seed = seed,
     n.threads = n.threads,
     tol = tol,
-    penalize.intercept = penalize.intercept,
-    has.intercept = (attr(mt, "intercept") == 1L),
+    center = center,
     mt = mt
   )
 }
@@ -139,7 +129,7 @@ cvLM.lm <- function(
   seed = 1L,
   n.threads = 1L,
   tol = 1e-7,
-  penalize.intercept = FALSE,
+  center = FALSE,
   ...
 ) {
   # Raise warning for unsupported lm features (weights and offset)
@@ -212,8 +202,7 @@ cvLM.lm <- function(
     seed = seed,
     n.threads = n.threads,
     tol = tol,
-    penalize.intercept = penalize.intercept,
-    has.intercept = (attr(mt, "intercept") == 1L),
+    center = center,
     mt = mt
   )
 }
@@ -227,7 +216,7 @@ cvLM.glm <- function(
   seed = 1L,
   n.threads = 1L,
   tol = 1e-7,
-  penalize.intercept = FALSE,
+  center = FALSE,
   ...
 ) {
   if (!.is_lm(object)) {

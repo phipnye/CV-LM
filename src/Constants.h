@@ -16,11 +16,6 @@ inline constexpr std::size_t grainSize{1};
 // (also known as IEEE 754) standard" -
 // https://stat.ethz.ch/R-manual/R-devel/library/base/html/double.html
 
-// Enforce IEEE 754 / IEC 559 compliance
-static_assert(
-    std::numeric_limits<double>::is_iec559,
-    "Full IEC 60559 (IEEE 754) compliance is required for this R package.");
-
 // Not a number
 static_assert(std::numeric_limits<double>::has_quiet_NaN,
               "System does not support NaN values potentially required for "

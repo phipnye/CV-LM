@@ -2,72 +2,92 @@
 
 #include <RcppEigen.h>
 
-#include <optional>
+#include <utility>
 
-#include "Enums-enums.h"
+#include "ConstexprOptional.h"
+#include "Enums.h"
 #include "Stats-computations.h"
-#include "Utils-Decompositions-utils.h"
+#include "Utils-Data.h"
+#include "Utils-Decompositions.h"
 
 namespace CV::OLS {
 
-template <Enums::AnalyticMethod CVMethod>
+template <Enums::AnalyticMethod Analytic, Enums::CenteringMethod Centering>
 class Fit {
+  // Static boolean flags for control-flow/methodology reasoning
+  static constexpr bool meanCenter{Centering == Enums::CenteringMethod::Mean};
+  static constexpr bool useLOOCV{Analytic == Enums::AnalyticMethod::LOOCV};
+
   // Eigen objects
   const Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> qtz_;
   const Eigen::VectorXd qTy_;
-  const std::optional<Eigen::VectorXd> diagHat_;  // not needed for GCV
 
   // Scalars
   const Eigen::Index nrow_;
   const Eigen::Index rank_;
 
+  // Optional members
+  using OptionalVector = ConstexprOptional<useLOOCV, Eigen::VectorXd>;
+  const OptionalVector diagHat_;  // only needed for loocv
+
  public:
   explicit Fit(const Eigen::Map<Eigen::VectorXd>& y,
                const Eigen::Map<Eigen::MatrixXd>& x, const double threshold)
       // Compute complete orthogonal decomposition of X (XP = QTZ)
-      : qtz_{Utils::Decompositions::cod(x, threshold)},
+      : qtz_{Utils::Decompositions::cod<Centering>(x, threshold)},
 
         // Construct Q'y
-        qTy_{qtz_.householderQ().transpose() * y},
+        qTy_{qtz_.householderQ().transpose() *
+             (meanCenter ? Utils::Data::centerResponse(y) : y)},
+
+        // Scalars
+        nrow_{x.rows()},
+        rank_{qtz_.rank()},
 
         // Diagonal of hat matrix
-        diagHat_{[&]() -> std::optional<Eigen::VectorXd> {
-          // We only need the diagonal entries of the projection matrix for
+        diagHat_{[&]() -> OptionalVector {
+          // We only need the diagonal entries of the hat matrix for
           // LOOCV
-          if constexpr (CVMethod == Enums::AnalyticMethod::LOOCV) {
+          if constexpr (useLOOCV) {
             // Leverage values: h_ii = [X(X'X)^-1 X']_ii
             // Using QR, H = Q_1Q_1' so h_ii = sum_{j=1}^{rank} q_{ij}^2
             // (rowwise squared norm of thin Q)
             const Eigen::MatrixXd qThin{
                 qtz_.householderQ() *
                 Eigen::MatrixXd::Identity(x.rows(), qtz_.rank())};
-
-            // Use NRVO to prevent against potential dangling references with
-            // expression templates
             Eigen::VectorXd diagHat{qThin.rowwise().squaredNorm()};
-            return diagHat;
-          } else {
-            return std::nullopt;
-          }
-        }()},
 
-        // Scalars
-        nrow_{x.rows()},
-        rank_{qtz_.rank()} {}
+            // If the data was centered in R, we need to add 1/n to the diagonal
+            // entries to capture the dropped intercept column (manually
+            // verified in R this is the case regardless of whether the data is
+            // narrow or wide)
+            if constexpr (meanCenter) {
+              diagHat.array() += (1.0 / static_cast<double>(qtz_.rows()));
+            }
+
+            return OptionalVector{std::move(diagHat)};
+          } else {
+            return OptionalVector::empty();
+          }
+        }()} {}
 
   // Class should be immobile based on its intended use
   Fit(const Fit&) = delete;
   Fit& operator=(const Fit&) = delete;
 
   [[nodiscard]] double cv() const {
-    if constexpr (CVMethod == Enums::AnalyticMethod::GCV) {
-      const double traceHat{static_cast<double>(rank_)};  // trace(H) = rank(X)
-      return Stats::gcv(rss(), traceHat, nrow_);
-    } else {
-      // This assert should also serve as making sure the diagHat_ member has a
-      // value before "dereferencing"
-      Enums::assertExpected<CVMethod, Enums::AnalyticMethod::LOOCV>();
+    if constexpr (useLOOCV) {
       return Stats::loocv(residuals(), *diagHat_);
+    } else {
+      Enums::assertExpected<Analytic, Enums::AnalyticMethod::GCV>();
+
+      // If the data was centered in R, we need to add one to capture the
+      // dropped intercept column
+      constexpr double correction{meanCenter ? 1.0 : 0.0};
+
+      // trace(H) = rank(X)
+      const double traceHat{static_cast<double>(rank_) + correction};
+      return Stats::gcv(rss(), traceHat, nrow_);
     }
   }
 
@@ -77,8 +97,8 @@ class Fit {
     // Calculate RSS (using the full n x n orthogonal matrix Q, we transform y
     // into Q'y and partition the squared norm of y into two components:
     // ||y||^2 = ||(Q'y).head(rank)||^2 + ||(Q'y).tail(n - rank)||^2
-    // where the first term is the ESS the second term is the RSS [see "Matrix
-    // Computations" Golub p.263 4th ed.]
+    // where the first term is the ESS and the second term is the RSS [see
+    // "Matrix Computations" Golub p.263 4th ed.]
     return qTy_.tail(nrow_ - rank_).squaredNorm();
   }
 
