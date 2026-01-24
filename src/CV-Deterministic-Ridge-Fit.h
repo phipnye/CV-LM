@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CV_LM_CV_DETERMINISTIC_RIDGE_FIT_H
+#define CV_LM_CV_DETERMINISTIC_RIDGE_FIT_H
 
 #include <RcppEigen.h>
 
@@ -7,10 +8,10 @@
 #include "ConstexprOptional.h"
 #include "Enums.h"
 #include "ResponseWrapper.h"
-#include "Stats-computations.h"
+#include "Stats.h"
 #include "Utils-Decompositions.h"
 
-namespace CV::Ridge {
+namespace CV::Deterministic::Ridge {
 
 template <Enums::AnalyticMethod Analytic, Enums::CenteringMethod Centering>
 class Fit {
@@ -32,18 +33,6 @@ class Fit {
   using OptionalVector = ConstexprOptional<useLOOCV, Eigen::VectorXd>;
   const OptionalVector diagHat_;  // only needed for LOOCV
 
-  // Coordinate shrinkage factors = d_j^2 / (d_j^2 + lambda) [See ESL p.66]
-  static Eigen::VectorXd constructCoordShrinkFactors(
-      const Eigen::BDCSVD<Eigen::MatrixXd>& udvT, const double lambda) {
-    const Eigen::VectorXd singularValsSq{
-        Utils::Decompositions::getSingularVals(udvT).array().square()};
-
-    // Lambda should be strictly positive at this point so we do not need
-    // to worry about zero division
-    return Eigen::VectorXd{singularValsSq.array() /
-                           (singularValsSq.array() + lambda)};
-  }
-
  public:
   explicit Fit(const Eigen::Map<Eigen::VectorXd>& y,
                const Eigen::Map<Eigen::MatrixXd>& x, const double threshold,
@@ -51,10 +40,12 @@ class Fit {
       // Either SVD of original or centered design matrix
       : udvT_{Utils::Decompositions::svd<Centering>(x, Eigen::ComputeThinU,
                                                     threshold)},
+
+        // Coordinate shrinkage factors
         coordShrinkFactors_{constructCoordShrinkFactors(udvT_, lambda)},
 
         // Either centered response vector or reference to original response
-        // from R
+        // vector from R
         y_{y},
 
         // Scalars
@@ -64,34 +55,29 @@ class Fit {
         diagHat_{[&]() -> OptionalVector {
           // We only need the diagonal entries of the hat matrix for LOOCV
           if constexpr (useLOOCV) {
-            // h_ii = sum_{j=1}^{p} (u_ij^2 * ((d_j^2) / (d_j^2 + lambda)))
+            // h_ii = sum_{j=1}^{p} (u_ij^2 * (d_j^2 / (d_j^2 + lambda)))
             Eigen::VectorXd diagHat{
                 (udvT_.matrixU().array().square().rowwise() *
                  coordShrinkFactors_.array().transpose())
                     .rowwise()
                     .sum()};
 
-            // If the data was centered in R, we need to add 1/n to the diagonal
-            // entries to capture the dropped intercept column (manually
-            // verified in R this is the case regardless of whether the data is
-            // narrow or wide)
+            // If the data was centered, we need to add 1/n (diag(11')/n) to the
+            // diagonal entries to capture the dropped intercept column
             if constexpr (meanCenter) {
               diagHat.array() += (1.0 / static_cast<double>(udvT_.rows()));
             }
 
-            return OptionalVector{std::move(diagHat)};
+            return OptionalVector::make(std::move(diagHat));
           } else {
             return OptionalVector::empty();
           }
         }()} {}
 
-  // Class should be immobile due to its intended use
-  Fit(const Fit&) = delete;
-  Fit& operator=(const Fit&) = delete;
-
+  // Public facing generic method for obtaining deterministic CV result
   [[nodiscard]] double cv() const {
     if constexpr (useLOOCV) {
-      return Stats::loocv(residuals(), *diagHat_);
+      return Stats::loocv(residuals(), diagHat_.value());
     } else {
       Enums::assertExpected<Analytic, Enums::AnalyticMethod::GCV>();
       return Stats::gcv(rss(), traceHat(), nrow_);
@@ -101,7 +87,7 @@ class Fit {
  private:
   // Trace of hat matrix
   [[nodiscard]] double traceHat() const {
-    // If the data was centered in R, we need to add one to capture the dropped
+    // If the data was centered, we need to add one to capture the dropped
     // intercept column
     constexpr double correction{meanCenter ? 1.0 : 0.0};
 
@@ -119,15 +105,16 @@ class Fit {
      *       = y - sum_{j=1}^{p} u_j (d_j^2) / (d_j^2 + lambda) u_j'y
      */
     const auto& u{udvT_.matrixU()};
-    const auto& y{y_.get()};
-    const Eigen::VectorXd uTy{u.transpose() * y};
+    const auto& y{y_.value()};
     return Eigen::VectorXd{
-        y - (u * (coordShrinkFactors_.array() * uTy.array()).matrix())};
+        y -
+        (u *
+         (coordShrinkFactors_.array() * (u.transpose() * y).array()).matrix())};
   }
 
   // Sum of squared residuals
   [[nodiscard]] double rss() const {
-    const auto& y{y_.get()};
+    const auto& y{y_.value()};
     const Eigen::VectorXd uTy{udvT_.matrixU().transpose() * y};
 
     /*
@@ -148,6 +135,20 @@ class Fit {
             .sum()};
     return y.squaredNorm() - correctionTerm;
   }
+
+  // Coordinate shrinkage factors = d_j^2 / (d_j^2 + lambda) [See ESL p.66]
+  static Eigen::VectorXd constructCoordShrinkFactors(
+      const Eigen::BDCSVD<Eigen::MatrixXd>& udvT, const double lambda) {
+    const Eigen::VectorXd singularValsSq{
+        Utils::Decompositions::getSingularVals(udvT).array().square()};
+
+    // Lambda should be strictly positive at this point so we do not need to
+    // worry about zero division
+    return Eigen::VectorXd{singularValsSq.array() /
+                           (singularValsSq.array() + lambda)};
+  }
 };
 
-}  // namespace CV::Ridge
+}  // namespace CV::Deterministic::Ridge
+
+#endif  // CV_LM_CV_DETERMINISTIC_RIDGE_FIT_H

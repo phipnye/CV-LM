@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CV_LM_RESPONSEWRAPPER_H
+#define CV_LM_RESPONSEWRAPPER_H
 
 #include <RcppEigen.h>
 
@@ -35,5 +36,7 @@ class ResponseWrapper {
       : storage_{init(y)} {}
 
   // Retrieve underlying data
-  [[nodiscard]] const StorageType& get() const noexcept { return storage_; }
+  [[nodiscard]] const StorageType& value() const noexcept { return storage_; }
 };
+
+#endif  // CV_LM_RESPONSEWRAPPER_H

@@ -1,6 +1,9 @@
 #include <Rcpp.h>
 #include <RcppEigen.h>
 
+#include <limits>
+#include <string>
+
 #include "CV-engine.h"
 #include "Enums.h"
 #include "Grid-Generator.h"
@@ -16,8 +19,8 @@ static_assert(
     "Full IEC 60559 (IEEE 754) compliance is required for this R package.");
 
 // [[Rcpp::export(name="cv.lm.rcpp")]]
-double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y,
-                const Eigen::Map<Eigen::MatrixXd> x, const int k0,
+double cvLMRCpp(const Eigen::Map<Eigen::VectorXd>& y,
+                const Eigen::Map<Eigen::MatrixXd>& x, const int k0,
                 const double lambda, const bool generalized, const int seed,
                 const int nThreads, const double threshold, const bool center) {
   // Determine which type of model we're fitting (this has potentially important
@@ -45,8 +48,10 @@ double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y,
   if (generalized || k == nrow) {
     using CV::Deterministic::computeCV;
 
-    // OLS
+    // --- OLS
+
     if (useOLS) {
+      // GCV
       if (generalized) {
         return center ? computeCV<FitMethod::OLS, AnalyticMethod::GCV,
                                   CenteringMethod::Mean>(y, x, threshold)
@@ -54,13 +59,16 @@ double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y,
                                   CenteringMethod::None>(y, x, threshold);
       }
 
+      // LOOCV
       return center ? computeCV<FitMethod::OLS, AnalyticMethod::LOOCV,
                                 CenteringMethod::Mean>(y, x, threshold)
                     : computeCV<FitMethod::OLS, AnalyticMethod::LOOCV,
                                 CenteringMethod::None>(y, x, threshold);
     }
 
-    // Ridge regression GCV
+    // --- Ridge regression
+
+    // GCV
     if (generalized) {
       return center ? computeCV<FitMethod::Ridge, AnalyticMethod::GCV,
                                 CenteringMethod::Mean>(y, x, threshold, lambda)
@@ -68,14 +76,14 @@ double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y,
                                 CenteringMethod::None>(y, x, threshold, lambda);
     }
 
-    // Ridge regression LOOCV
+    // LOOCV
     return center ? computeCV<FitMethod::Ridge, AnalyticMethod::LOOCV,
                               CenteringMethod::Mean>(y, x, threshold, lambda)
                   : computeCV<FitMethod::Ridge, AnalyticMethod::LOOCV,
                               CenteringMethod::None>(y, x, threshold, lambda);
   }
 
-  // K-fold CV
+  // --- K-fold CV
   using CV::Stochastic::computeCV;
 
   // OLS
@@ -94,8 +102,8 @@ double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y,
 }
 
 // [[Rcpp::export(name="grid.search.rcpp")]]
-Rcpp::List gridSearch(const Eigen::Map<Eigen::VectorXd> y,
-                      const Eigen::Map<Eigen::MatrixXd> x, const int k0,
+Rcpp::List gridSearch(const Eigen::Map<Eigen::VectorXd>& y,
+                      const Eigen::Map<Eigen::MatrixXd>& x, const int k0,
                       const double maxLambda, const double precision,
                       const bool generalized, const int seed,
                       const int nThreads, const double threshold,
@@ -140,6 +148,6 @@ Rcpp::List gridSearch(const Eigen::Map<Eigen::VectorXd> y,
                                y, x, k, lambdasGrid, seed, nThreads, threshold);
   }
 
-  return Rcpp::List::create(Rcpp::Named("CV") = optimalPair.cv,
-                            Rcpp::Named("lambda") = optimalPair.lambda);
+  return Rcpp::List::create(Rcpp::Named("CV") = optimalPair.cv_,
+                            Rcpp::Named("lambda") = optimalPair.lambda_);
 }

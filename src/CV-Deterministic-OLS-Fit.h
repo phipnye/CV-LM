@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CV_LM_CV_DETERMINISTIC_OLS_FIT_H
+#define CV_LM_CV_DETERMINISTIC_OLS_FIT_H
 
 #include <RcppEigen.h>
 
@@ -6,11 +7,11 @@
 
 #include "ConstexprOptional.h"
 #include "Enums.h"
-#include "Stats-computations.h"
+#include "Stats.h"
 #include "Utils-Data.h"
 #include "Utils-Decompositions.h"
 
-namespace CV::OLS {
+namespace CV::Deterministic::OLS {
 
 template <Enums::AnalyticMethod Analytic, Enums::CenteringMethod Centering>
 class Fit {
@@ -31,6 +32,7 @@ class Fit {
   const OptionalVector diagHat_;  // only needed for loocv
 
  public:
+  // Main ctor
   explicit Fit(const Eigen::Map<Eigen::VectorXd>& y,
                const Eigen::Map<Eigen::MatrixXd>& x, const double threshold)
       // Compute complete orthogonal decomposition of X (XP = QTZ)
@@ -46,43 +48,37 @@ class Fit {
 
         // Diagonal of hat matrix
         diagHat_{[&]() -> OptionalVector {
-          // We only need the diagonal entries of the hat matrix for
-          // LOOCV
+          // We only need the diagonal entries of the hat matrix for LOOCV
           if constexpr (useLOOCV) {
             // Leverage values: h_ii = [X(X'X)^-1 X']_ii
-            // Using QR, H = Q_1Q_1' so h_ii = sum_{j=1}^{rank} q_{ij}^2
+            // Using QR=QTZ, H = Q_1Q_1' so h_ii = sum_{j=1}^{rank} q_{ij}^2
             // (rowwise squared norm of thin Q)
             const Eigen::MatrixXd qThin{
                 qtz_.householderQ() *
                 Eigen::MatrixXd::Identity(x.rows(), qtz_.rank())};
             Eigen::VectorXd diagHat{qThin.rowwise().squaredNorm()};
 
-            // If the data was centered in R, we need to add 1/n to the diagonal
-            // entries to capture the dropped intercept column (manually
-            // verified in R this is the case regardless of whether the data is
-            // narrow or wide)
+            // If the data was centered, we need to add 1/n (diag(11')/n) to the
+            // diagonal entries to capture the dropped intercept column
             if constexpr (meanCenter) {
               diagHat.array() += (1.0 / static_cast<double>(qtz_.rows()));
             }
 
-            return OptionalVector{std::move(diagHat)};
+            return OptionalVector::make(std::move(diagHat));
           } else {
             return OptionalVector::empty();
           }
         }()} {}
 
-  // Class should be immobile based on its intended use
-  Fit(const Fit&) = delete;
-  Fit& operator=(const Fit&) = delete;
-
+  // Public facing generic method for obtaining deterministic CV result
   [[nodiscard]] double cv() const {
     if constexpr (useLOOCV) {
-      return Stats::loocv(residuals(), *diagHat_);
+      return Stats::loocv(residuals(), diagHat_.value());
     } else {
       Enums::assertExpected<Analytic, Enums::AnalyticMethod::GCV>();
 
-      // If the data was centered in R, we need to add one to capture the
-      // dropped intercept column
+      // If the data was centered we need to add one to capture the dropped
+      // intercept column
       constexpr double correction{meanCenter ? 1.0 : 0.0};
 
       // trace(H) = rank(X)
@@ -116,4 +112,6 @@ class Fit {
   }
 };
 
-}  // namespace CV::OLS
+}  // namespace CV::Deterministic::OLS
+
+#endif  // CV_LM_CV_DETERMINISTIC_OLS_FIT_H

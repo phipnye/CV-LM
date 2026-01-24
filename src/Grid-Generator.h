@@ -1,17 +1,16 @@
-#pragma once
+#ifndef CV_LM_GRID_GENERATOR_H
+#define CV_LM_GRID_GENERATOR_H
 
 #include <RcppEigen.h>
 
 namespace Grid {
 
-// Lightweight description of the grid
+// Lightweight description of the grid of shrinkage parameter values to search
+// across
 class Generator {
   const double maxLambda_;
   const double precision_;
-  const Eigen::Index
-      internalN;           // number of intermediate steps between (0, maxLambda)
-  const bool hasTail_;  // precision and maxLambda don't align so manually force
-                        // max value
+  const Eigen::Index size_;
 
  public:
   explicit Generator(double maxLambda, double precision);
@@ -21,3 +20,5 @@ class Generator {
 };
 
 }  // namespace Grid
+
+#endif  // CV_LM_GRID_GENERATOR_H

@@ -1,9 +1,10 @@
-#pragma once
+#ifndef CV_LM_GRID_DETERMINISTIC_WORKERMODEL_H
+#define CV_LM_GRID_DETERMINISTIC_WORKERMODEL_H
 
 #include <RcppEigen.h>
 
 #include "Enums.h"
-#include "Stats-computations.h"
+#include "Stats.h"
 
 namespace Grid::Deterministic {
 
@@ -25,8 +26,8 @@ class WorkerModel {
  public:
   // Main ctor
   WorkerModel(const Eigen::VectorXd& uTySq,
-               const Eigen::VectorXd& singularValsSq, const double rssNull,
-               const Eigen::Index nrow)
+              const Eigen::VectorXd& singularValsSq, const double rssNull,
+              const Eigen::Index nrow)
       : coordShrinkFactorsDenom_{singularValsSq.size()},
         uTySq_{uTySq},
         singularValsSq_{singularValsSq},
@@ -41,7 +42,8 @@ class WorkerModel {
         rssNull_{other.rssNull_},
         nrow_{other.nrow_} {}
 
-  // Needs to be moveable for worker constructor
+  // Needs to be moveable for worker constructor (buffers stolen, references
+  // copied)
   WorkerModel(WorkerModel&&) = default;
 
   // Assignments shouldn't be necessary
@@ -96,8 +98,8 @@ class WorkerModel {
  public:
   // Main ctor
   WorkerModel(const Eigen::VectorXd& yNull, const Eigen::MatrixXd& u,
-               const Eigen::MatrixXd& uSq, const Eigen::VectorXd& uTy,
-               const Eigen::VectorXd& singularValsSq, const Eigen::Index nrow)
+              const Eigen::MatrixXd& uSq, const Eigen::VectorXd& uTy,
+              const Eigen::VectorXd& singularValsSq, const Eigen::Index nrow)
       : coordShrinkFactors_{singularValsSq.size()},
         coordShrinkFactorsDenom_{singularValsSq.size()},
         diagHat_{nrow},
@@ -122,7 +124,8 @@ class WorkerModel {
         singularValsSq_{other.singularValsSq_},
         nrow_{other.nrow_} {}
 
-  // Needs to be moveable for worker constructor
+  // Needs to be moveable for worker constructor (buffers stolen, references
+  // copied)
   WorkerModel(WorkerModel&&) = default;
 
   // Assignments shouldn't be necessary
@@ -138,8 +141,8 @@ class WorkerModel {
     coordShrinkFactors_ =
         singularValsSq_.array() / coordShrinkFactorsDenom_.array();
 
-    // Diagonal of hat matrix = diag(U * shrinkage * U'): optimized as diag(H) =
-    // (U^2) * diag(shrinkage)
+    // Diagonal of hat matrix = diag(U * shrinkage * U')
+    // h_ii = sum_j u_ij^2 (d_j^2 / (d_j^2 + lambda))
     diagHat_.noalias() = uSq_ * coordShrinkFactors_;
 
     // Add 1/n to account for the unpenalized intercept if the data was centered
@@ -161,3 +164,5 @@ class WorkerModel {
 }  // namespace LOOCV
 
 }  // namespace Grid::Deterministic
+
+#endif  // CV_LM_GRID_DETERMINISTIC_WORKERMODEL_H

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CV_LM_STATS_H
+#define CV_LM_STATS_H
 
 #include <RcppEigen.h>
 
@@ -12,3 +13,5 @@ namespace Stats {
                            const Eigen::VectorXd& diagHat);
 
 }  // namespace Stats
+
+#endif  // CV_LM_STATS_H

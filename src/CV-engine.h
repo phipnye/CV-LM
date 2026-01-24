@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CV_LM_CV_ENGINE_H
+#define CV_LM_CV_ENGINE_H
 
 #include <RcppEigen.h>
 #include <RcppParallel.h>
@@ -6,8 +7,8 @@
 #include <cstddef>
 #include <utility>
 
-#include "CV-OLS-Fit.h"
-#include "CV-Ridge-Fit.h"
+#include "CV-Deterministic-OLS-Fit.h"
+#include "CV-Deterministic-Ridge-Fit.h"
 #include "CV-Stochastic-Worker.h"
 #include "CV-Stochastic-WorkerModel.h"
 #include "Enums.h"
@@ -51,20 +52,27 @@ template <Enums::FitMethod Fit, Enums::CenteringMethod Centering,
                                const int k, const int seed, const int nThreads,
                                const double threshold, Lambda&&... lambda) {
   // Setup folds
-  const Eigen::Index nrow{x.rows()};
-  const Utils::Folds::FoldInfo foldInfo{seed, static_cast<int>(nrow), k};
+  const Utils::Folds::DataSplitter splitter{seed, x.rows(), k};
+
+  // Permute the design matrix and response vector so test observations are
+  // stored contiguously (this generates a copy of the R data once at the
+  // benefit of avoiding copies using indexed views)
+  const Eigen::VectorXi perm{splitter.buildPermutation()};
+  const Eigen::VectorXd ySorted{y(perm)};
+  const Eigen::MatrixXd xSorted{x(perm, Eigen::all)};
 
   // Initialize the templated worker with pre-allocated buffers for computing
   // coefficients and decompostions depending on whether we're using OLS or
   // ridge regression
   auto worker{[&]() {
     if constexpr (Fit == Enums::FitMethod::OLS) {
-      // Enums::assertExpected<Centering, Enums::CenteringMethod::None>();
-      return Worker<OLS::WorkerModel, Centering>{y, x, foldInfo, threshold};
+      return Worker<OLS::WorkerModel, Centering>{ySorted, xSorted, splitter,
+                                                 threshold};
     } else {
       Enums::assertExpected<Fit, Enums::FitMethod::Ridge>();
       return Worker<Ridge::WorkerModel, Centering>{
-          y, x, foldInfo, threshold, std::forward<Lambda>(lambda)...};
+          ySorted, xSorted, splitter, threshold,
+          std::forward<Lambda>(lambda)...};
     }
   }()};
 
@@ -76,3 +84,5 @@ template <Enums::FitMethod Fit, Enums::CenteringMethod Centering,
 }  // namespace Stochastic
 
 }  // namespace CV
+
+#endif  // CV_LM_CV_ENGINE_H

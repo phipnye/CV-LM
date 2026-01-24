@@ -12,13 +12,13 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // cvLMRCpp
-double cvLMRCpp(const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::MatrixXd> x, const int k0, const double lambda, const bool generalized, const int seed, const int nThreads, const double threshold, const bool center);
+double cvLMRCpp(const Eigen::Map<Eigen::VectorXd>& y, const Eigen::Map<Eigen::MatrixXd>& x, const int k0, const double lambda, const bool generalized, const int seed, const int nThreads, const double threshold, const bool center);
 RcppExport SEXP _cvLM_cvLMRCpp(SEXP ySEXP, SEXP xSEXP, SEXP k0SEXP, SEXP lambdaSEXP, SEXP generalizedSEXP, SEXP seedSEXP, SEXP nThreadsSEXP, SEXP thresholdSEXP, SEXP centerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type x(xSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd>& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd>& >::type x(xSEXP);
     Rcpp::traits::input_parameter< const int >::type k0(k0SEXP);
     Rcpp::traits::input_parameter< const double >::type lambda(lambdaSEXP);
     Rcpp::traits::input_parameter< const bool >::type generalized(generalizedSEXP);
@@ -31,13 +31,13 @@ BEGIN_RCPP
 END_RCPP
 }
 // gridSearch
-Rcpp::List gridSearch(const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::MatrixXd> x, const int k0, const double maxLambda, const double precision, const bool generalized, const int seed, const int nThreads, const double threshold, const bool center);
+Rcpp::List gridSearch(const Eigen::Map<Eigen::VectorXd>& y, const Eigen::Map<Eigen::MatrixXd>& x, const int k0, const double maxLambda, const double precision, const bool generalized, const int seed, const int nThreads, const double threshold, const bool center);
 RcppExport SEXP _cvLM_gridSearch(SEXP ySEXP, SEXP xSEXP, SEXP k0SEXP, SEXP maxLambdaSEXP, SEXP precisionSEXP, SEXP generalizedSEXP, SEXP seedSEXP, SEXP nThreadsSEXP, SEXP thresholdSEXP, SEXP centerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type x(xSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd>& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd>& >::type x(xSEXP);
     Rcpp::traits::input_parameter< const int >::type k0(k0SEXP);
     Rcpp::traits::input_parameter< const double >::type maxLambda(maxLambdaSEXP);
     Rcpp::traits::input_parameter< const double >::type precision(precisionSEXP);

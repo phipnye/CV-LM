@@ -1,14 +1,16 @@
-#pragma once
+#ifndef CV_LM_CONSTANTS_H
+#define CV_LM_CONSTANTS_H
 
 #include <cstddef>
 #include <limits>
 
 namespace Constants {
 
-// First iterator of worker operator()
+// First iteration of worker operator()
 inline constexpr std::size_t begin{0};
 
-// Grain size for RcppParallel (minimum chunk size for parallelization)
+// Grain size for RcppParallel (minimum chunk size for parallelization -
+// preventing the creation of threads that process less than the grain size)
 inline constexpr std::size_t grainSize{1};
 
 // These static asserts should be safe since IEEE 754 supports NaN and Inf
@@ -29,3 +31,5 @@ static_assert(std::numeric_limits<double>::has_infinity,
 inline constexpr double Inf{std::numeric_limits<double>::infinity()};
 
 }  // namespace Constants
+
+#endif  // CV_LM_CONSTANTS_H

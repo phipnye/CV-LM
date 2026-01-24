@@ -1,4 +1,4 @@
-#include "Stats-computations.h"
+#include "Stats.h"
 
 #include <RcppEigen.h>
 
@@ -8,8 +8,9 @@ namespace Stats {
 
 // GCV = MSE / (1 - trace(H)/n)^2
 double gcv(const double rss, const double traceHat, const Eigen::Index nrow) {
-  // MSE = RSS / n (in some rare instances, we may get a tiny rss from floating
-  // precision errors which are wrong/meaningless so we truncate at 0.0)
+  // MSE = RSS / n (in some rare instances, we may get a tiny negative rss from
+  // floating precision errors which are wrong/meaningless so we truncate at
+  // 0.0)
   const double nrowDbl{static_cast<double>(nrow)};
   const double mse{std::max(0.0, rss / nrowDbl)};
 
@@ -29,10 +30,10 @@ double gcv(const double rss, const double traceHat, const Eigen::Index nrow) {
 // LOOCV = mean((e_i / (1 - h_ii))^2)
 double loocv(const Eigen::VectorXd& residuals, const Eigen::VectorXd& diagHat) {
   // Just as we did for gcv, defend against small floating point precision
-  // errors, for both OLS and Ridge h_ii should never exceed 1
+  // errors (for both OLS and Ridge h_ii should never exceed 1)
   /* OLS: The hat matrix is idempotent and symmetic such that H^2 = H, thus:
-   * (H^2)_ii = sum_j h_ij h_ji            = h_ii
-   *          = sum_j h_ij^2               = h_ii
+   * (H^2)_ii = sum_j h_ij h_ji            = h_ii (idempotent)
+   *          = sum_j h_ij^2               = h_ii (symmetric)
    *          = h_ii^2 + sum_{j!=i} h_ij^2 = h_ii
    *          -> h_ii^2 <= h_ii
    *          -> 0 <= h_ii <= 1

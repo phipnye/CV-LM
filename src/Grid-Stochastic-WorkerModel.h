@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CV_LM_GRID_STOCHASTIC_WORKERMODEL_H
+#define CV_LM_GRID_STOCHASTIC_WORKERMODEL_H
 
 #include <RcppEigen.h>
 
@@ -35,7 +36,7 @@ class WorkerModel {
         singularVals_{std::min(maxTrainSize, ncol)},
         singularValsSq_{std::min(maxTrainSize, ncol)},
         singularShrinkFactors_{std::min(maxTrainSize, ncol)},
-        singularValsSize_{0}  // gets set in the fit method
+        singularValsSize_{-1}  // gets set in the fit method
   {
     // Prescribe threshold to SVD where singular values are considered zero "A
     // singular value will be considered nonzero if its value is strictly
@@ -53,7 +54,7 @@ class WorkerModel {
         singularVals_{other.singularVals_.size()},
         singularValsSq_{other.singularValsSq_.size()},
         singularShrinkFactors_{other.singularShrinkFactors_.size()},
-        singularValsSize_{0}  // gets set in the fit method
+        singularValsSize_{-1}  // gets set in the fit method
   {
     // Prescribe threshold to SVD where singular values are considered zero
     udvT_.setThreshold(other.udvT_.threshold());
@@ -66,6 +67,9 @@ class WorkerModel {
   [[nodiscard]] Eigen::ComputationInfo fit(
       const Eigen::MatrixBase<DerivedX>& xTrain,
       const Eigen::MatrixBase<DerivedY>& yTrain) {
+    // Make sure the data is what we expect
+    Utils::Data::assertDataStructure(xTrain, yTrain);
+
     // Obtain singular value decomposition of the training set
     udvT_.compute(xTrain);
 
@@ -77,17 +81,15 @@ class WorkerModel {
 
     // Across folds (particularly with wide data), m = min(n, p) may change
     singularValsSize_ = udvT_.singularValues().size();
-    auto singularVals{singularVals_.head(singularValsSize_)};
-    auto singularValsSq{singularValsSq_.head(singularValsSize_)};
-    auto uTy{uTy_.head(singularValsSize_)};
 
     // Extract the singular values
-    Utils::Decompositions::getSingularVals(udvT_, singularVals_);
-    singularValsSq = singularVals.array().square();
+    auto singularVals{singularVals_.head(singularValsSize_)};
+    Utils::Decompositions::getSingularVals(udvT_, singularVals);
+    singularValsSq_.head(singularValsSize_) = singularVals.array().square();
 
     // Compute projection of y onto the left singular vectors of X
-    Utils::Data::assertColumnVector(yTrain);
-    uTy.noalias() = udvT_.matrixU().transpose() * yTrain;
+    uTy_.head(singularValsSize_).noalias() =
+        udvT_.matrixU().transpose() * yTrain;
     return Eigen::Success;
   }
 
@@ -100,7 +102,10 @@ class WorkerModel {
   [[nodiscard]] double olsEvalTestMSE(
       const Eigen::MatrixBase<DerivedX>& xTest,
       const Eigen::MatrixBase<DerivedY>& yTest) {
-    // Shrinkage_j simplifies to diag(1 / d_j) when lambda == 0.0
+    // Make sure the data is what we expect
+    Utils::Data::assertDataStructure(xTest, yTest);
+
+    // Shrinkage factors simplify to 1 / diag(D) when lambda == 0.0
     singularShrinkFactors_.setZero();
 
     // See "Matrix Analysis and Applied Linear Algebra" [Meyer p.423]
@@ -114,7 +119,10 @@ class WorkerModel {
   [[nodiscard]] double ridgeEvalTestMSE(
       const Eigen::MatrixBase<DerivedX>& xTest,
       const Eigen::MatrixBase<DerivedY>& yTest, const double lambda) {
-    // At this point, we should have lambda > 0(these shrinkage factors are
+    // Make sure the data is what we expect
+    Utils::Data::assertDataStructure(xTest, yTest);
+
+    // At this point, we should have lambda > 0 (these shrinkage factors are
     // related to the coordinate shrinkage factors (d_j^2 / (d_j^2 + lambda))
     // for solving fitted values X * beta but are reduced by d_j since we're
     // solving explicitly for beta)
@@ -128,6 +136,9 @@ class WorkerModel {
   template <typename DerivedX, typename DerivedY>
   [[nodiscard]] double evalTestMSE(const Eigen::MatrixBase<DerivedX>& xTest,
                                    const Eigen::MatrixBase<DerivedY>& yTest) {
+    // Make sure the data is what we expect
+    Utils::Data::assertDataStructure(xTest, yTest);
+
     /*
      * beta = (X'X + LI)^-1 X'y
      * (V D^2 V' + LI) * beta = VDU'y
@@ -143,7 +154,7 @@ class WorkerModel {
                       uTy_.head(singularValsSize_).array())};
     beta_.noalias() = udvT_.matrixV() * alpha.matrix();
 
-    // Compute testing set residuals
+    // Compute test set residuals
     const Eigen::Index testSize{xTest.rows()};
     auto testResid{testResid_.head(testSize)};
     testResid.noalias() = yTest - (xTest * beta_);
@@ -154,3 +165,5 @@ class WorkerModel {
 };
 
 }  // namespace Grid::Stochastic
+
+#endif  // CV_LM_GRID_STOCHASTIC_WORKERMODEL_H

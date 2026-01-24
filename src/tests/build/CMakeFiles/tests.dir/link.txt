@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/tests.dir/tests.cpp.o -o tests   -L/usr/lib/R/lib  -Wl,-rpath,/usr/lib/R/lib /usr/lib/libCatch2Main.a -lR /usr/lib/libCatch2.a 

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CV_LM_GRID_DETERMINISTIC_WORKER_H
+#define CV_LM_GRID_DETERMINISTIC_WORKER_H
 
 #include <RcppEigen.h>
 #include <RcppParallel.h>
@@ -39,8 +40,11 @@ class Worker : public RcppParallel::Worker {
         optimalPair_{0.0, Constants::Inf},
         lambdasGrid_{other.lambdasGrid_} {}
 
-  // parallelReduce work operator
+  // Work operator for parallel reduction - each thread gets its own exclusive
+  // range
   void operator()(const std::size_t begin, const std::size_t end) override {
+    // This type cast is safe, the grid ctor ensures the size (end) doesn't
+    // exceed Index limit
     const Eigen::Index endIdx{static_cast<Eigen::Index>(end)};
 
     for (Eigen::Index lambdaIdx{static_cast<Eigen::Index>(begin)};
@@ -49,24 +53,28 @@ class Worker : public RcppParallel::Worker {
       const double lambda{lambdasGrid_[lambdaIdx]};
 
       // Calculate GCV or LOOCV (IEEE 754 evaluates < to false for NaN)
-      if (const double cv{model_.computeCV(lambda)}; cv < optimalPair_.cv) {
-        optimalPair_.cv = cv;
-        optimalPair_.lambda = lambda;
+      if (const double cv{model_.computeCV(lambda)}; cv < optimalPair_.cv_) {
+        optimalPair_.cv_ = cv;
+        optimalPair_.lambda_ = lambda;
       }
     }
   }
 
-  // Join logic for parallel reduction
+  // Reduce results across multiple threads
   void join(const Worker& other) {
-    if (other.optimalPair_.cv < optimalPair_.cv) {
+    // In the off chance of multiple min CVs, the smaller lambda should be taken
+    // because LHS (this) is the earlier sequence compared to RHS (other)
+    if (other.optimalPair_.cv_ < optimalPair_.cv_) {
       optimalPair_ = other.optimalPair_;
     }
   }
 
-  // Member access
+  // Retrieve optimal result
   [[nodiscard]] LambdaCV getOptimalPair() const noexcept {
     return optimalPair_;
   }
 };
 
 }  // namespace Grid::Deterministic
+
+#endif  // CV_LM_GRID_DETERMINISTIC_WORKER_H

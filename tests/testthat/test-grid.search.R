@@ -61,13 +61,13 @@ seed <- 73568569
 max.lambda <- 100
 precision <- 0.5
 scenarios <- list(
-  df.narrow.min = df.narrow.min,
-  df.narrow.mid = df.narrow.mid,
-  df.narrow.max = df.narrow.max,
-  df.wide.min = df.wide.min,
-  df.wide.mid = df.wide.mid,
-  df.wide.max = df.wide.max,
-  df.rd.mid = df.rd.mid
+  df.narrow.min,
+  df.narrow.mid,
+  df.narrow.max,
+  df.wide.min,
+  df.wide.mid,
+  df.wide.max,
+  df.rd.mid
 )
 
 # --- Run tests
@@ -80,10 +80,7 @@ test_that("grid.search matches brute-force cvLM sweep", {
     lambdas <- c(lambdas, max.lambda)
   }
 
-  for (i in seq_along(scenarios)) {
-    data.set <- scenarios[[i]]
-    nm <- names(scenarios)[i]
-    
+  for (data.set in scenarios) {
     for (K in K.vals) {
       K <- K %||% nrow(data.set)
       is.loocv <- K == nrow(data.set)
@@ -106,22 +103,23 @@ test_that("grid.search matches brute-force cvLM sweep", {
               list(K = K, max.lambda = max.lambda, precision = precision)
             )
           ))
-
-          manual.cvs <- vapply(
-            lambdas,
-            function(lambda) {
-              muffle(do.call(
-                cvLM,
-                c(common.args, list(K.vals = K, lambda = lambda))
-              ))$CV
-            },
-            numeric(1)
-          )
-
+          
+          tm <- system.time({
+            manual.cvs <- vapply(
+              lambdas,
+              function(lambda) {
+                muffle(do.call(
+                  cvLM,
+                  c(common.args, list(K.vals = K, lambda = lambda))
+                ))$CV
+              },
+              numeric(1)
+            )
+          })
+          
           best.idx <- which.min(manual.cvs)
           expect_equal(grid.res$CV, manual.cvs[best.idx])
           expect_equal(grid.res$lambda, lambdas[best.idx])
-          print(sprintf("%s: %f", nm, grid.res$lambda))
         }
       }
     }

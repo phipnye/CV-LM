@@ -1,4 +1,6 @@
-#pragma once
+#ifndef CV_LM_UTILS_PARALLEL_H
+#define CV_LM_UTILS_PARALLEL_H
+
 #include <RcppParallel.h>
 
 #include <cstddef>
@@ -14,3 +16,5 @@ void reduce(Worker& worker, std::size_t end, int nThreads) {
 }
 
 }  // namespace Utils::Parallel
+
+#endif  // CV_LM_UTILS_PARALLEL_H

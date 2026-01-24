@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CV_LM_UTILS_DECOMPOSITIONS_H
+#define CV_LM_UTILS_DECOMPOSITIONS_H
 
 #include <RcppEigen.h>
 
@@ -14,22 +15,30 @@ void checkSvdInfo(Eigen::ComputationInfo info);
 [[nodiscard]] Eigen::VectorXd getSingularVals(
     const Eigen::BDCSVD<Eigen::MatrixXd>& udvT);
 
-// Retrieve properly zeroed-out singular values in-place
+// Retrieve properly zeroed-out singular values into a pre-allocated buffer
+template <typename Derived>
 void getSingularVals(const Eigen::BDCSVD<Eigen::MatrixXd>& udvT,
-                     Eigen::VectorXd& singularVals);
+                     Eigen::MatrixBase<Derived>& singularVals) {
+  Data::assertColumnVector(singularVals);
+  const Eigen::Index rank{udvT.rank()};
+  singularVals.setZero();
+  singularVals.head(rank) = udvT.singularValues().head(rank);
+}
 
 // Perform singular value decomposition of X
-template <Enums::CenteringMethod Centering, typename Derived,
-          bool checkSucccess = true>
+template <Enums::CenteringMethod Centering, bool checkSucccess = true,
+          typename Derived>
 [[nodiscard]] Eigen::BDCSVD<Eigen::MatrixXd> svd(
     const Eigen::MatrixBase<Derived>& x, const unsigned int computationOptions,
     const double threshold) {
+  // Make sure we passed a matrix-like object
+  Data::assertMatrix(x);
+
   // Decompose X = UDV'
   using SVD = Eigen::BDCSVD<Eigen::MatrixXd>;
   auto udvT{[&]() -> SVD {
     if constexpr (Centering == Enums::CenteringMethod::Mean) {
-      const Eigen::MatrixXd xCentered{Data::centerPredictors(x)};
-      return SVD{xCentered, computationOptions};
+      return SVD{Data::centerPredictors(x), computationOptions};
     } else {
       Enums::assertExpected<Centering, Enums::CenteringMethod::None>();
       return SVD{x, computationOptions};
@@ -55,14 +64,16 @@ template <Enums::CenteringMethod Centering, typename Derived,
 template <Enums::CenteringMethod Centering, typename Derived>
 [[nodiscard]] Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(
     const Eigen::MatrixBase<Derived>& x, const double threshold) {
+  // Make sure we passed a matrix-like object
+  Data::assertMatrix(x);
+
   // Decompose XP = QR = QTZ (there's no need to check the success of this
   // decomposition - the documentation states the info method always returns
   // success)
   using COD = Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd>;
   auto qtz{[&]() -> COD {
     if constexpr (Centering == Enums::CenteringMethod::Mean) {
-      const Eigen::MatrixXd xCentered{Data::centerPredictors(x)};
-      return COD{xCentered};
+      return COD{Data::centerPredictors(x)};
     } else {
       Enums::assertExpected<Centering, Enums::CenteringMethod::None>();
       return COD{x};
@@ -77,3 +88,5 @@ template <Enums::CenteringMethod Centering, typename Derived>
 }
 
 }  // namespace Utils::Decompositions
+
+#endif  // CV_LM_UTILS_DECOMPOSITIONS_H

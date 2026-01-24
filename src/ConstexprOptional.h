@@ -1,4 +1,7 @@
-#pragma once
+#ifndef CV_LM_CONSTEXPROPTIONAL_H
+#define CV_LM_CONSTEXPROPTIONAL_H
+
+#include <RcppEigen.h>
 
 #include <type_traits>
 #include <utility>
@@ -14,41 +17,64 @@ class ConstexprOptional {
   using StorageType = std::conditional_t<Cond, T, EmptyState>;
   StorageType object_;
 
- public:
   // Disabled / default ctor
   template <bool C = Cond, typename = std::enable_if_t<!C>>
   constexpr ConstexprOptional() : object_{} {}
-
-  // Static empty() factory only enabled when cond == false
-  template <bool C = Cond, typename = std::enable_if_t<!C>>
-  static constexpr ConstexprOptional empty() {
-    return ConstexprOptional{};
-  }
 
   // Main ctor for enabled state
   template <bool C = Cond, typename = std::enable_if_t<C>, typename... Args>
   explicit constexpr ConstexprOptional(Args&&... args)
       : object_{std::forward<Args>(args)...} {}
 
-  // Dereference operators (only enabled when cond == true)
+ public:
+  // Empty state creator
+  template <bool C = Cond, typename = std::enable_if_t<!C>>
+  static constexpr ConstexprOptional empty() {
+    return ConstexprOptional{};
+  }
+
+  // Public facing constuctor dispatch
+  template <typename... Args>
+  static constexpr ConstexprOptional make(Args&&... args) {
+    if constexpr (Cond) {
+      return ConstexprOptional{std::forward<Args>(args)...};  // enabled state
+    } else {
+      return empty();  // empty/disabled state
+    }
+  }
+
+  // Helper to clone data buffers by copying their dimensions without copying
+  // any data (copies the data for non-Eigen Matrix or Vector types)
+  [[nodiscard]] constexpr ConstexprOptional clone() const {
+    if constexpr (Cond) {
+      if constexpr (std::is_base_of_v<
+                        Eigen::PlainObjectBase<std::remove_cv_t<T>>,
+                        std::remove_cv_t<T>>) {
+        return make(object_.rows(), object_.cols());  // works for vectors too
+      } else {
+        return make(object_);
+      }
+    } else {
+      return empty();
+    }
+  }
+
+  // Retrieve underlying data (only enabled when cond == true)
   template <bool C = Cond, typename = std::enable_if_t<C>>
-  constexpr const T& operator*() const noexcept {
+  [[nodiscard]] constexpr const T& value() const noexcept {
+    static_assert(
+        Cond && C,
+        "Attempting to retrieve an unset value of a ConstexprOptional object.");
     return object_;
   }
 
   template <bool C = Cond, typename = std::enable_if_t<C>>
-  constexpr T& operator*() noexcept {
+  [[nodiscard]] constexpr T& value() noexcept {
+    static_assert(
+        Cond && C,
+        "Attempting to retrieve an unset value of a ConstexprOptional object.");
     return object_;
   }
-
-  // Removing these to avoid dereferencing overhead
-  // template <bool C = Cond, typename = std::enable_if_t<C>>
-  // constexpr const T* operator->() const noexcept {
-  //   return &object_;
-  // }
-  //
-  // template <bool C = Cond, typename = std::enable_if_t<C>>
-  // constexpr T* operator->() noexcept {
-  //   return &object_;
-  // }
 };
+
+#endif  // CV_LM_CONSTEXPROPTIONAL_H

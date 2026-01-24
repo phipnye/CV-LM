@@ -1,11 +1,13 @@
+#include "Utils-Folds.h"
+
 #include <Rcpp.h>
 #include <RcppEigen.h>
 
 #include <cfenv>
 #include <cmath>
+#include <string>
 #include <tuple>
-
-#include "Utils-Folds.h"
+#include <utility>
 
 namespace Utils::Folds {
 
@@ -15,6 +17,8 @@ ScopedRoundingMode::ScopedRoundingMode(const int mode)
   std::fesetround(mode);
 }
 
+// Restore original rounding mode when object goes out-of-scope and gets
+// destroyed
 ScopedRoundingMode::~ScopedRoundingMode() { std::fesetround(oldMode_); }
 
 // Confirm valid value for K
@@ -36,10 +40,10 @@ int kCheck(const int nrow, const int k0, const bool generalized) {
    *     warning(gettextf("'K' has been set to %f", K), domain = NA)
    */
 
-  [[maybe_unused]] const ScopedRoundingMode roundGuard{
-      FE_TONEAREST};  // round to nearest, ties to even
+  // FE_TONEAREST -> round to nearest, ties to even
+  [[maybe_unused]] const ScopedRoundingMode roundGuard{FE_TONEAREST};
   const double nDbl{static_cast<double>(nrow)};
-  const int floorNHalf{nrow / 2};
+  const int floorHalfN{nrow / 2};
 
   // Start with den = 1 (we already checked for no difference at beginning of
   // function)
@@ -47,12 +51,13 @@ int kCheck(const int nrow, const int k0, const bool generalized) {
   int minDiff{closestK - k0};
 
   // Consider k values between n and 2 (iterates through possible denominators
-  // to find a K value that fits n
-  for (int den{2}; den <= floorNHalf; ++den) {
-    const int kVal{
-        static_cast<int>(std::nearbyint(nDbl / den))};  // use banker's rounding
+  // to find a K value that fits n)
+  for (int den{2}; den <= floorHalfN; ++den) {
+    // Use banker's rounding
+    const int kVal{static_cast<int>(std::nearbyint(nDbl / den))};
     const int absDiff{std::abs(k0 - kVal)};
 
+    // Per: K <- kvals[temp == min(temp)][1L], take first instance
     if (absDiff == 0) {
       return k0;
     }
@@ -67,8 +72,8 @@ int kCheck(const int nrow, const int k0, const bool generalized) {
   return closestK;
 }
 
-FoldInfo::FoldInfo(const int seed, const int nrow, const int k)
-    : testFoldIDs_{[=]() -> Eigen::VectorXi {
+DataSplitter::DataSplitter(const int seed, const Eigen::Index nrow, const int k)
+    : testIDs_{[&]() {
         // Call back into R for sample and set.seed to guarantee the exact same
         // random partitions as boot::cv.glm (using C++ RNG would break
         // reproducibility)
@@ -85,50 +90,61 @@ FoldInfo::FoldInfo(const int seed, const int nrow, const int k)
             static_cast<int>(std::ceil(static_cast<double>(nrow) / k))};
         const Rcpp::IntegerVector seqVec{Rcpp::rep(Rcpp::seq(1, k), repeats)};
         const Rcpp::IntegerVector sampled{sampleR(seqVec, nrow)};
-        Eigen::VectorXi testFoldIDs{Rcpp::as<Eigen::VectorXi>(sampled)};
+        Eigen::VectorXi testIDs{Rcpp::as<Eigen::VectorXi>(sampled)};
 
-        // Convert to zero indexing
-        testFoldIDs.array() -= 1;
-        return testFoldIDs;
+        // Convert to zero-indexing
+        testIDs.array() -= 1;
+        return testIDs;
       }()},
 
-      testFoldSizes_{[&]() -> Eigen::VectorXi {
+      // The number of test observations per fold
+      testSizes_{[&]() -> Eigen::VectorXi {
         // R's internal documentation states the number of rows for a matrix are
         // limited to 32-bit values so VectorXi is safe here
-        Eigen::VectorXi testFoldSizes{Eigen::VectorXi::Zero(k)};
+        Eigen::VectorXi testSizes{Eigen::VectorXi::Zero(k)};
 
         // Store test fold sizes to calculate the weighted CV estimate:
         // sum((n_i / n) * cost_i)
-        const Eigen::Index size{testFoldIDs_.size()};
-
-        for (Eigen::Index idx{0}; idx < size; ++idx) {
-          ++testFoldSizes[testFoldIDs_[idx]];
+        for (Eigen::Index idx{0}; idx < nrow; ++idx) {
+          ++testSizes[testIDs_[idx]];
         }
 
-        return testFoldSizes;
+        return testSizes;
       }()},
 
-      // Pre-compute the max test and train sizes so we can allocate appropriate
+      // Record where the test indices for a given fold start
+      testStarts_{[&]() -> Eigen::VectorXi {
+        Eigen::VectorXi testStarts{Eigen::VectorXi::Zero(k)};
+
+        for (Eigen::Index idx{1}; idx < k; ++idx) {
+          testStarts[idx] = testStarts[idx - 1] + testSizes_[idx - 1];
+        }
+
+        return testStarts;
+      }()},
+
       // buffer sizes in worker instances
-      maxTestSize_{static_cast<Eigen::Index>(testFoldSizes_.maxCoeff())},
-      maxTrainSize_{
-          static_cast<Eigen::Index>(nrow - testFoldSizes_.minCoeff())},
+      maxTestSize_{static_cast<Eigen::Index>(testSizes_.maxCoeff())},
+      maxTrainSize_{nrow - testSizes_.minCoeff()},
       nrow_{nrow} {}
 
-// Split the test and training indices
-void FoldInfo::testTrainSplit(const int testID, Eigen::VectorXi& testIdxs,
-                              Eigen::VectorXi& trainIdxs) const {
-  Eigen::Index trIdx{0};
-  Eigen::Index tsIdx{0};
+Eigen::VectorXi DataSplitter::buildPermutation() const {
+  // Store the current index/offset for each fold to write an observation to
+  Eigen::VectorXi offsets{testStarts_};
+  Eigen::VectorXi perm{nrow_};
 
-  // Fill the Idxs buffers with the corresponding test/train row indices
-  for (int rowIdx{0}; rowIdx < nrow_; ++rowIdx) {
-    if (testFoldIDs_[rowIdx] == testID) {
-      testIdxs[tsIdx++] = rowIdx;
-    } else {
-      trainIdxs[trIdx++] = rowIdx;
-    }
+  for (int idx{0}; idx < nrow_; ++idx) {
+    perm[offsets[testIDs_[idx]]++] = idx;
   }
+
+  return perm;
 }
+
+std::pair<int, int> DataSplitter::operator[](const Eigen::Index idx) const {
+  return std::make_pair(testStarts_[idx], testSizes_[idx]);
+}
+
+Eigen::Index DataSplitter::maxTrain() const noexcept { return maxTrainSize_; }
+Eigen::Index DataSplitter::maxTest() const noexcept { return maxTestSize_; }
 
 }  // namespace Utils::Folds

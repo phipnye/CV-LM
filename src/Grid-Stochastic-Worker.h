@@ -1,11 +1,11 @@
-#pragma once
+#ifndef CV_LM_GRID_STOCHASTIC_WORKER_H
+#define CV_LM_GRID_STOCHASTIC_WORKER_H
 
 #include <RcppEigen.h>
 #include <RcppParallel.h>
 
 #include <cstddef>
 
-#include "CenteringBuffers.h"
 #include "Enums.h"
 #include "Grid-Generator.h"
 #include "Grid-LambdaCV.h"
@@ -17,131 +17,91 @@ namespace Grid::Stochastic {
 
 template <Enums::CenteringMethod Centering>
 class Worker : public RcppParallel::Worker {
-  // Static boolean to check if we mean center the data
-  static constexpr bool meanCenter{Centering == Enums::CenteringMethod::Mean};
-
-  // Accumulator (vector of cv results - one per lambda)
-  Eigen::VectorXd cvs_;
-
-  // Thread-specific data buffers
-  Eigen::VectorXi trainIdxs_;
-  Eigen::VectorXi testIdxs_;
+  // --- Data members
 
   // Worker model object for computing coefficients and test MSEs
   WorkerModel model_;
 
-  // References
-  const Utils::Folds::FoldInfo& foldInfo_;
-  const Eigen::Map<Eigen::VectorXd>& y_;
-  const Eigen::Map<Eigen::MatrixXd>& x_;
+  // Container in charge of retrieving (and centering) test and training data
+  Utils::Folds::DataLoader<Centering> loader_;
+
+  // Reference to fold paritioning information
+  const Utils::Folds::DataSplitter& splitter_;
+
+  // Generator for retrieving shrinkage parameter values to test
   const Generator& lambdasGrid_;
 
-  // Sizes
-  const Eigen::Index nrow_;
+  // Accumulator (vector of cv results - one per lambda)
+  Eigen::VectorXd cvs_;
 
-  // Optional buffers for when centering is needed
-  CenteringBuffers<meanCenter> centeringBuffers_;
+  // Number of rows in the design matrix (observations)
+  const Eigen::Index nrow_;
 
   // Enum indicating success of singular value decompositions of training sets
   Eigen::ComputationInfo info_;
 
  public:
   // Main ctor
-  explicit Worker(const Eigen::Map<Eigen::VectorXd>& y,
-                  const Eigen::Map<Eigen::MatrixXd>& x,
-                  const Utils::Folds::FoldInfo& foldInfo,
+  explicit Worker(const Eigen::VectorXd& ySorted,
+                  const Eigen::MatrixXd& xSorted,
+                  const Utils::Folds::DataSplitter& splitter,
                   const Generator& lambdasGrid, const double threshold)
-      : cvs_{Eigen::VectorXd::Zero(lambdasGrid.size())},
-        trainIdxs_{foldInfo.maxTrainSize_},
-        testIdxs_{foldInfo.maxTestSize_},
-        model_{x.cols(), foldInfo.maxTrainSize_, foldInfo.maxTestSize_,
+      : model_{xSorted.cols(), splitter.maxTrain(), splitter.maxTest(),
                threshold},
-        foldInfo_{foldInfo},
-        y_{y},
-        x_{x},
+        loader_{ySorted, xSorted, splitter.maxTrain(), splitter.maxTest()},
+        splitter_{splitter},
         lambdasGrid_{lambdasGrid},
-        nrow_{x.rows()},
-        centeringBuffers_{x.cols(), foldInfo.maxTrainSize_,
-                          foldInfo.maxTestSize_},
+        cvs_{Eigen::VectorXd::Zero(lambdasGrid.size())},
+        nrow_{xSorted.rows()},
         info_{Eigen::Success} {}
 
   // Split ctor
   Worker(const Worker& other, const RcppParallel::Split)
-      : cvs_{Eigen::VectorXd::Zero(other.cvs_.size())},
-        trainIdxs_{other.trainIdxs_.size()},
-        testIdxs_{other.testIdxs_.size()},
-        model_{other.model_},
-        foldInfo_{other.foldInfo_},
-        y_{other.y_},
-        x_{other.x_},
+      : model_{other.model_},
+        loader_{other.loader_},
+        splitter_{other.splitter_},
         lambdasGrid_{other.lambdasGrid_},
+        cvs_{Eigen::VectorXd::Zero(other.cvs_.size())},
         nrow_{other.nrow_},
-        centeringBuffers_{other.centeringBuffers_},
         info_{other.info_} {}
 
   // Worker should only be copied via split ctor
   Worker(const Worker&) = delete;
   Worker& operator=(const Worker&) = delete;
 
-  // RcppParallel requires an operator() to perform the work
+  // Work operator for parallel reduction - each thread gets its own exclusive
+  // range
   void operator()(const std::size_t begin, const std::size_t end) override {
-    // Casting from std::size_t to int is safe here (end is the number of folds
-    // which is a 32-bit integer from R)
-    const int endID{static_cast<int>(end)};
+    // Casting from std::size_t to Index is safe here (end is the number of
+    // folds which is a signed 32-bit integer from R)
+    const Eigen::Index endID{static_cast<Eigen::Index>(end)};
 
-    for (int testID{static_cast<int>(begin)}; testID < endID; ++testID) {
-      // Retrieve size of test and training sets
-      const Eigen::Index testSize{foldInfo_.testFoldSizes_[testID]};
-      const Eigen::Index trainSize{nrow_ - testSize};
+    for (Eigen::Index testID{static_cast<Eigen::Index>(begin)}; testID < endID;
+         ++testID) {
+      // Extract where the test data set starts from (which rows) and how many
+      // observations are used in the test set
+      const auto [testStart, testSize]{splitter_[testID]};
 
-      // MSE contribution weight
-      const double wt{static_cast<double>(testSize) /
-                      static_cast<double>(nrow_)};
+      // Get the (potentially centered) test and training data sets
+      const auto [xTrain, yTrain, xTest,
+                  yTest]{loader_.prepData(testStart, testSize)};
 
-      // Split the test and training indices
-      foldInfo_.testTrainSplit(testID, testIdxs_, trainIdxs_);
-
-      // Some folds may have fewer observations for the training set (these
-      // subsets are views)
-      const auto trainIdxs{trainIdxs_.head(trainSize)};
-      const auto testIdxs{testIdxs_.head(testSize)};
-      const auto xTrain{x_(trainIdxs, Eigen::all)};
-      const auto yTrain{y_(trainIdxs)};
-      const auto xTest{x_(testIdxs, Eigen::all)};
-      const auto yTest{y_(testIdxs)};
-
-      // Perform SVD on training set (uses computation options given in ctor)
-      if constexpr (meanCenter) {
-        // Center the training data and the testing data using the testing set
-        // column means
-        centeringBuffers_.centerData(xTrain, yTrain, xTest, yTest);
-        info_ = model_.fit(centeringBuffers_.getXTrain().topRows(trainSize),
-                           centeringBuffers_.getYTrain().head(trainSize));
-        // info_ = Fit the model
-      } else {
-        Enums::assertExpected<Centering, Enums::CenteringMethod::None>();
-        info_ = model_.fit(xTrain, yTrain);
-      }
+      // Fit the model to the training dataset
+      info_ = model_.fit(xTrain, yTrain);
 
       // Terminate early if SVD wasn't successful
       if (info_ != Eigen::Success) {
         return;
       }
 
+      // MSE contribution weight
+      const double wt{static_cast<double>(testSize) /
+                      static_cast<double>(nrow_)};
       Eigen::Index lambdaIdx{0};
 
       // Handle the OLS case first in case of rank-deficiency
       if (lambdasGrid_[lambdaIdx] <= 0.0) {
-        double testMSE{0.0};
-
-        if constexpr (meanCenter) {
-          testMSE += model_.olsEvalTestMSE(
-              centeringBuffers_.getXTest().topRows(testSize),
-              centeringBuffers_.getYTest().head(testSize));
-        } else {
-          testMSE += model_.olsEvalTestMSE(xTest, yTest);
-        }
-
+        const double testMSE{model_.olsEvalTestMSE(xTest, yTest)};
         cvs_[lambdaIdx++] += (wt * testMSE);
       }
 
@@ -151,23 +111,13 @@ class Worker : public RcppParallel::Worker {
       // have to worry about zero division for the cooridate shrinkage factors
       while (lambdaIdx < nLambda) {
         const double lambda{lambdasGrid_[lambdaIdx]};
-        double testMSE{0.0};
-
-        if constexpr (meanCenter) {
-          testMSE += model_.ridgeEvalTestMSE(
-              centeringBuffers_.getXTest().topRows(testSize),
-              centeringBuffers_.getYTest().head(testSize), lambda);
-        } else {
-          testMSE += model_.ridgeEvalTestMSE(xTest, yTest, lambda);
-        }
-
+        const double testMSE{model_.ridgeEvalTestMSE(xTest, yTest, lambda)};
         cvs_[lambdaIdx++] += (wt * testMSE);
       }
     }
   }
 
-  // parallelReduce uses join to compose the operations of two worker instances
-  // that were previously split
+  // Reduce results across multiple threads
   void join(const Worker& other) {
     // Record unsuccessful decompositions
     if (info_ != Eigen::Success) {
@@ -179,7 +129,8 @@ class Worker : public RcppParallel::Worker {
       return;
     }
 
-    // Add up cross-validation results across folds of the data
+    // Add up cross-validation results across folds of the data (vector addition
+    // across shrinkage parameter values)
     cvs_ += other.cvs_;
   }
 
@@ -201,3 +152,5 @@ class Worker : public RcppParallel::Worker {
 };
 
 }  // namespace Grid::Stochastic
+
+#endif  // CV_LM_GRID_STOCHASTIC_WORKER_H

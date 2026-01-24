@@ -2,6 +2,8 @@
 
 #include <RcppEigen.h>
 
+#include <algorithm>
+
 namespace CV::Stochastic {
 
 namespace OLS {
@@ -39,9 +41,9 @@ WorkerModel::WorkerModel(const Eigen::Index ncol,
       singularShrinkFactors_{std::min(maxTrainSize, ncol)},
       lambda_{lambda},
       info_{Eigen::Success} {
-  // Prescribe threshold to SVD where singular values are considered zero "A
-  // singular value will be considered nonzero if its value is strictly greater
-  // than |singularvalue|⩽threshold×|maxsingularvalue|."
+  // Prescribe threshold where singular values are considered zero "A singular
+  // value will be considered nonzero if its value is strictly greater than
+  // |singularvalue|⩽threshold×|maxsingularvalue|."
   udvT_.setThreshold(threshold);
 }
 
@@ -55,7 +57,7 @@ WorkerModel::WorkerModel(const WorkerModel& other)
       singularShrinkFactors_{other.singularShrinkFactors_.size()},
       lambda_{other.lambda_},
       info_{other.info_} {
-  // Prescribe threshold to SVD where singular values are considered zero
+  // Prescribe threshold where singular values are considered zero
   udvT_.setThreshold(other.udvT_.threshold());
 }
 
