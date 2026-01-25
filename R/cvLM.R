@@ -2,7 +2,7 @@
 ##
 ## This file is part of the cvLM package.
 
-# Internal function that accepts prepared data and paramters
+# Internal function that accepts prepared data and parameters
 .cvLM_fit <- function(
   y,
   X,
@@ -27,18 +27,18 @@
   .assert_logical_scalar(generalized, "generalized")
 
   # Seed
-  seed <- .assert_integer_scalar(seed, "seed", nonneg = TRUE)
+  seed <- .assert_integer_scalar(seed, "seed", nonneg = FALSE)
 
   # Number of threads (-1 -> defaultNumThreads)
   n.threads <- .assert_valid_threads(n.threads)
 
   # Threshold for complete orthogonal decomposition
   tol <- .assert_double_scalar(tol, "tol", nonneg = TRUE)
-  
-  # Whether to center the data - affecting whether the intercept term is penalized or not in the case of 
+
+  # Whether to center the data - affecting whether the intercept term is penalized or not in the case of
   # ridge regression (can also provide different numbers for undetermined OLS cases)
   .assert_logical_scalar(center, "center")
-  
+
   # Drop the intercept term if we're centering the data
   if (center && attr(mt, "intercept") == 1L) {
     X <- .drop_intercept(X)
@@ -46,6 +46,11 @@
 
   # Check for valid regression data before passing to C++
   .assert_valid_data(y, X)
+  
+  # If generalized, K doesn't matter so just set it to look like LOOCV since it's an LOOCV shortcut
+  if (generalized) {
+    K.vals <- nrow(X)
+  }
 
   # Pass off to C++
   cvs <- vapply(
@@ -76,18 +81,18 @@ cvLM <- function(object, ...) UseMethod("cvLM")
 cvLM.formula <- function(
   object,
   data,
-  subset = NULL,
-  na.action = NULL,
+  subset,
+  na.action,
   K.vals = 10L,
   lambda = 0,
   generalized = FALSE,
   seed = 1L,
   n.threads = 1L,
   tol = 1e-7,
-  center = FALSE,
+  center = TRUE,
   ...
 ) {
-  # --- Extract data (mimic lm behavior)
+  # --- Extract data (mimic lm() behavior)
 
   mf <- match.call(expand.dots = FALSE)
   m <- match(c("object", "data", "subset", "na.action"), names(mf), 0L)
@@ -98,12 +103,12 @@ cvLM.formula <- function(
   mf <- eval(mf, parent.frame())
   mt <- attr(mf, "terms")
 
-  if (is.empty.model(mt)) {
+  if (stats::is.empty.model(mt)) {
     stop("Empty model specified.", call. = FALSE)
   }
 
-  X <- model.matrix(mt, mf)
-  y <- model.response(mf, "double")
+  X <- stats::model.matrix(mt, mf)
+  y <- stats::model.response(mf, "double")
 
   .cvLM_fit(
     y = y,
@@ -129,7 +134,7 @@ cvLM.lm <- function(
   seed = 1L,
   n.threads = 1L,
   tol = 1e-7,
-  center = FALSE,
+  center = TRUE,
   ...
 ) {
   # Raise warning for unsupported lm features (weights and offset)
@@ -147,51 +152,12 @@ cvLM.lm <- function(
     )
   }
 
-  # --- Reconstruct model frame
-
-  # We cannot simply use object$model because the user may have supplied a new 'subset' or 'na.action' in
-  # this call (we must merge the original call with the current arguments)
-
-  # Start with a generic model.frame call
-  mf.call <- quote(stats::model.frame())
-
-  # Use the formula/terms from the object (preserves environment)
-  mf.call$formula <- terms(object)
-
-  # If data provided in current call, use it (otherwise, fall back to original)
-  if (!missing(data)) {
-    mf.call$data <- data
-  } else {
-    mf.call$data <- object$call$data
-  }
-
-  cl.curr <- match.call(expand.dots = FALSE)
-
-  # Handle subset
-  if ("subset" %in% names(cl.curr)) {
-    mf.call$subset <- cl.curr$subset
-  } else {
-    mf.call$subset <- object$call$subset
-  }
-
-  # Handle na.action
-  if ("na.action" %in% names(cl.curr)) {
-    mf.call$na.action <- cl.curr$na.action
-  } else {
-    mf.call$na.action <- object$call$na.action
-  }
-
-  mf.call$drop.unused.levels <- TRUE
-
-  # Evaluate in parent.frame() to ensure any 'subset' symbols (like a vector of indices) defined in current
-  # scope are found
-  mf <- eval(mf.call, parent.frame())
-
   # --- Extract data
 
+  mf <- stats::model.frame(object, data = data)
   mt <- attr(mf, "terms")
-  X <- model.matrix(mt, mf, contrasts.arg = object$contrasts)
-  y <- model.response(mf, "double")
+  X <- stats::model.matrix(mt, mf)
+  y <- stats::model.response(mf, "double")
 
   .cvLM_fit(
     y = y,
@@ -216,7 +182,7 @@ cvLM.glm <- function(
   seed = 1L,
   n.threads = 1L,
   tol = 1e-7,
-  center = FALSE,
+  center = TRUE,
   ...
 ) {
   if (!.is_lm(object)) {

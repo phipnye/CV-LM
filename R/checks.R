@@ -65,7 +65,7 @@ is.wholenumber <- function(x, tol = .Machine$double.eps^0.5) {
   if (!is.matrix(X) || !is.double(X)) {
     stop("The design matrix must be a numeric matrix.", call. = FALSE)
   }
-  
+
   # y must be a vector
   if (!is.atomic(y) || !is.double(y)) {
     stop("The response vector must be a numeric vector", call. = FALSE)
@@ -123,12 +123,12 @@ is.wholenumber <- function(x, tol = .Machine$double.eps^0.5) {
 
   # Make sure number of folds between 2 and n
   if (any(K.vals < 2L)) {
-    stop("All values of 'K.vals' must be >= 2.", call. = FALSE)
+    stop("All values of K must be >= 2.", call. = FALSE)
   }
 
   if (any(K.vals > n)) {
     stop(
-      "All values of 'K.vals' must be <= number of observations.",
+      "All values of K must be <= number of observations.",
       call. = FALSE
     )
   }

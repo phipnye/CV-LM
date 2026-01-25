@@ -260,3 +260,39 @@ test_that("cvLM S3 methods return identical results", {
     }
   }
 })
+
+test_that("cvLM results are agnostic to the number of threads", {
+  # Skip multithreaded tests on CRAN
+  skip_on_cran()
+  multi.threads <- max(RcppParallel::defaultNumThreads(), 2L)
+
+  for (data.set in list(df.narrow, df.wide, df.rd, df.ill)) {
+    for (K in K.vals) {
+      if (is.null(K)) {
+        next # LOOCV isn't multithreaded
+      }
+
+      for (lambda in lambdas) {
+        common.args <- list(
+          y ~ .,
+          data = data.set,
+          K.vals = K,
+          lambda = lambda,
+          seed = seed
+        )
+        res.single <- muffle(do.call(
+          cvLM,
+          c(common.args, list(n.threads = 1L))
+        ))
+        res.multiple <- muffle(do.call(
+          cvLM,
+          c(common.args, list(n.threads = multi.threads))
+        ))
+
+        # Results may not be exactly identical because of the lack of associativity for floating point
+        # addition
+        expect_equal(res.single, res.multiple)
+      }
+    }
+  }
+})

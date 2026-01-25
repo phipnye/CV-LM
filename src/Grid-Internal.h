@@ -6,6 +6,8 @@
 #include "Grid-Deterministic-Worker.h"
 #include "Grid-Deterministic-WorkerModel.h"
 #include "Grid-LambdaCV.h"
+#include "ResponseWrapper.h"
+#include "Utils-Parallel.h"
 
 namespace Grid::Deterministic::Internal {
 

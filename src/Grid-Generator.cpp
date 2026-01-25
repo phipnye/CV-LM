@@ -14,9 +14,6 @@ Generator::Generator(const double maxLambda, const double precision)
     : maxLambda_{maxLambda},
       precision_{precision},
       size_{[&]() -> Eigen::Index {
-        // These checks are already implemented in R, but we add them here to
-        // double check because the overhead is small and the consequences can
-        // be large
         if (precision <= 0.0) {
           Rcpp::stop("precision must be > 0");
         }

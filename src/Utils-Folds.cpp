@@ -5,6 +5,7 @@
 
 #include <cfenv>
 #include <cmath>
+#include <cstdlib>
 #include <string>
 #include <tuple>
 #include <utility>

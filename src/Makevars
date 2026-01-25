@@ -13,5 +13,8 @@ PKG_CXXFLAGS += -DEIGEN_DONT_PARALLELIZE
 # option of GCC or clang will significantly degrade the accuracy."
 # PKG_CXXFLAGS += -fno-fast-math -fno-unsafe-math-optimizations
 
+PKG_LIBS = $(BLAS_LIBS)
+PKG_CXXFLAGS += -DEIGEN_USE_BLAS
+
 # Link against RcppParallel
 PKG_LIBS += $(shell ${R_HOME}/bin/Rscript -e "RcppParallel::RcppParallelLibs()")

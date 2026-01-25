@@ -16,7 +16,7 @@ grid.search <- function(
   precision = 0.1,
   center = TRUE
 ) {
-  # --- Extract data
+  # --- Extract data (mimic lm() behavior)
 
   mf <- match.call(expand.dots = FALSE)
   m <- match(c("formula", "data", "subset", "na.action"), names(mf), 0L)
@@ -26,12 +26,12 @@ grid.search <- function(
   mf <- eval(mf, parent.frame())
   mt <- attr(mf, "terms")
 
-  if (is.empty.model(mt)) {
+  if (stats::is.empty.model(mt)) {
     stop("Empty model specified.", call. = FALSE)
   }
 
-  X <- model.matrix(mt, mf)
-  y <- model.response(mf, "double")
+  X <- stats::model.matrix(mt, mf)
+  y <- stats::model.response(mf, "double")
 
   # --- Confirm validity of arguments
 
@@ -42,7 +42,7 @@ grid.search <- function(
   .assert_logical_scalar(generalized, "generalized")
 
   # Seed
-  seed <- .assert_integer_scalar(seed, "seed", nonneg = TRUE)
+  seed <- .assert_integer_scalar(seed, "seed", nonneg = FALSE)
 
   # Number of threads (-1 -> defaultNumThreads)
   n.threads <- .assert_valid_threads(n.threads)
@@ -56,8 +56,8 @@ grid.search <- function(
   # Precision / step size
   precision <- .assert_double_scalar(precision, "precision", nonneg = TRUE)
 
-  # Whether to center the data - affecting whether the intercept term is penalized or not in the case of 
-  # ridge regression (can also provide different numbers for undetermined OLS cases)
+  # Whether to center the data - affecting whether the intercept term is penalized or not in the case of
+  # ridge regression (can also provide different numbers for underdetermined OLS cases)
   .assert_logical_scalar(center, "center")
 
   # Drop the intercept term if we're centering the data
@@ -67,6 +67,10 @@ grid.search <- function(
 
   # Check for valid regression data before passing to C++
   .assert_valid_data(y, X)
+
+  # Make sure K is still valid
+  K <- .assert_valid_kvals(K, nrow(X))
+
   grid.search.rcpp(
     y = y,
     x = X,
