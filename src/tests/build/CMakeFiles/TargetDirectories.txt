@@ -1,3 +1,0 @@
-/home/philip/Documents/R projects/CV-LM/src/tests/build/CMakeFiles/tests.dir
-/home/philip/Documents/R projects/CV-LM/src/tests/build/CMakeFiles/edit_cache.dir
-/home/philip/Documents/R projects/CV-LM/src/tests/build/CMakeFiles/rebuild_cache.dir

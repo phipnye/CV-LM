@@ -1,7 +1,7 @@
 #ifndef CV_LM_GRID_GENERATOR_H
 #define CV_LM_GRID_GENERATOR_H
 
-#include <RcppEigen.h>
+#include <RcppArmadillo.h>
 
 namespace Grid {
 
@@ -10,13 +10,13 @@ namespace Grid {
 class Generator {
   const double maxLambda_;
   const double precision_;
-  const Eigen::Index size_;
+  const arma::uword size_;
 
  public:
   explicit Generator(double maxLambda, double precision);
 
-  [[nodiscard]] Eigen::Index size() const noexcept;
-  [[nodiscard]] double operator[](Eigen::Index idx) const noexcept;
+  [[nodiscard]] arma::uword size() const noexcept;
+  [[nodiscard]] double operator[](arma::uword idx) const noexcept;
 };
 
 }  // namespace Grid

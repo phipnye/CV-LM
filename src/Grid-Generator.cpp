@@ -1,7 +1,6 @@
 #include "Grid-Generator.h"
 
-#include <Rcpp.h>
-#include <RcppEigen.h>
+#include <RcppArmadillo.h>
 
 #include <algorithm>
 #include <cmath>
@@ -11,9 +10,7 @@
 namespace Grid {
 
 Generator::Generator(const double maxLambda, const double precision)
-    : maxLambda_{maxLambda},
-      precision_{precision},
-      size_{[&]() -> Eigen::Index {
+    : maxLambda_{maxLambda}, precision_{precision}, size_{[&]() -> arma::uword {
         if (precision <= 0.0) {
           Rcpp::stop("precision must be > 0");
         }
@@ -37,27 +34,27 @@ Generator::Generator(const double maxLambda, const double precision)
         // Determine the absolute ceiling for the grid size (througout our code,
         // we need to be able to convert the size to a std::size_t and an
         // Eigen::Index)
-        constexpr double limitEigen{
-            static_cast<double>(std::numeric_limits<Eigen::Index>::max())};
+        constexpr double limitArma{
+            static_cast<double>(std::numeric_limits<arma::uword>::max())};
         constexpr double limitSizeT{
             static_cast<double>(std::numeric_limits<std::size_t>::max())};
 
         // Limit the grid size (this is important because we parallelize over
         // values of lambda for deterministic cv methods, requiring the ability
         // to cast the size to a std::size_t without overflow
-        if (constexpr double safetyLimit{std::min(limitEigen, limitSizeT)};
+        if (constexpr double safetyLimit{std::min(limitArma, limitSizeT)};
             rawN >= safetyLimit) {
           Rcpp::stop(
               "Grid size is too large. Try increasing precision or reducing "
               "max lambda.");
         }
 
-        return static_cast<Eigen::Index>(rawN);
+        return static_cast<arma::uword>(rawN);
       }()} {}
 
-Eigen::Index Generator::size() const noexcept { return size_; }
+arma::uword Generator::size() const noexcept { return size_; }
 
-double Generator::operator[](const Eigen::Index idx) const noexcept {
+double Generator::operator[](const arma::uword idx) const noexcept {
   return std::min(static_cast<double>(idx) * precision_, maxLambda_);
 }
 

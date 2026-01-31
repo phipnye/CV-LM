@@ -1,20 +1,11 @@
 # Set the C++ standard
 CXX_STD = CXX17
 
-# Suppress Eigen's "stupid" warnings
-PKG_CXXFLAGS += -DEIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
+# Link agaist lapack and blas
+PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
-# Don't use Eigen multithreading
-PKG_CXXFLAGS += -DEIGEN_DONT_PARALLELIZE
-
-# Eigen BDCSVD documentation states "this algorithm is unlikely to provide accurate result when compiled
-# with unsafe math optimizations. For instance, this concerns Intel's compiler (ICC), which performs such
-# optimization by default unless you compile with the -fp-model precise option. Likewise, the -ffast-math
-# option of GCC or clang will significantly degrade the accuracy."
-# PKG_CXXFLAGS += -fno-fast-math -fno-unsafe-math-optimizations
-
-PKG_LIBS = $(BLAS_LIBS)
-PKG_CXXFLAGS += -DEIGEN_USE_BLAS
+# Arma definitions
+PKG_CXXFLAGS += -DARMA_DONT_USE_OPENMP 
 
 # Link against RcppParallel
 PKG_LIBS += $(shell ${R_HOME}/bin/Rscript -e "RcppParallel::RcppParallelLibs()")

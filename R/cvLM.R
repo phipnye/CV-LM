@@ -46,10 +46,30 @@
 
   # Check for valid regression data before passing to C++
   .assert_valid_data(y, X)
-  
+
   # If generalized, K doesn't matter so just set it to look like LOOCV since it's an LOOCV shortcut
   if (generalized) {
     K.vals <- nrow(X)
+  }
+
+  # GCV and LOOCV aren't multithreaded
+  if (all(K.vals == nrow(X))) {
+    n.threads <- 1L
+  }
+
+  # Try to prevent from oversubscription
+  if (n.threads > 1L) {
+    if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+      old.blas.threads <- RhpcBLASctl::blas_get_num_procs()
+      RhpcBLASctl::blas_set_num_threads(1L)
+      on.exit(RhpcBLASctl::blas_set_num_threads(old.blas.threads), add = TRUE)
+    } else {
+      warning(
+        "Parallel execution requested, but 'RhpcBLASctl' is not installed. Performance may be degraded if ",
+        "using a multithreaded BLAS implementation. Install 'RhpcBLASctl' or use n.threads = 1 to silence",
+        "this warning."
+      )
+    }
   }
 
   # Pass off to C++
@@ -57,14 +77,14 @@
     K.vals,
     function(K) {
       cv.lm.rcpp(
+        X = X,
         y = y,
-        x = X,
         k0 = K,
         lambda = lambda,
         generalized = generalized,
         seed = seed,
         nThreads = min(K, n.threads),
-        threshold = tol,
+        tolerance = tol,
         center = center
       )
     },

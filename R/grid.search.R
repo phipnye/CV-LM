@@ -72,15 +72,15 @@ grid.search <- function(
   K <- .assert_valid_kvals(K, nrow(X))
 
   grid.search.rcpp(
+    X = X,
     y = y,
-    x = X,
     k0 = K,
     maxLambda = max.lambda,
     precision = precision,
     generalized = generalized,
     seed = seed,
     nThreads = n.threads,
-    threshold = tol,
+    tolerance = tol,
     center = center
   )
 }

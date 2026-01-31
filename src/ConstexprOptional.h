@@ -1,77 +1,60 @@
 #ifndef CV_LM_CONSTEXPROPTIONAL_H
 #define CV_LM_CONSTEXPROPTIONAL_H
 
-#include <RcppEigen.h>
+#include <RcppArmadillo.h>
 
 #include <type_traits>
 #include <utility>
 
 // Class to simulate std::optional with compile-time evaluation and prevent
 // accidental access when no value is set
-template <bool Cond, typename T>
+template <bool Enabled, typename T>
 class ConstexprOptional {
   // No set value placeholder
   struct EmptyState {};
 
   // Underlying data
-  using StorageType = std::conditional_t<Cond, T, EmptyState>;
-  StorageType object_;
+  std::conditional_t<Enabled, T, EmptyState> object_;
 
-  // Disabled / default ctor
-  template <bool C = Cond, typename = std::enable_if_t<!C>>
-  constexpr ConstexprOptional() : object_{} {}
+  // Detect if the type is an arma type
+  template <typename U>
+  static constexpr bool is_arma_type_v = arma::is_arma_type<U>::value;
 
-  // Main ctor for enabled state
-  template <bool C = Cond, typename = std::enable_if_t<C>, typename... Args>
+ public:
+  // Disabled-state ctor
+  template <bool C = Enabled, std::enable_if_t<!C, int> = 0, typename... Args>
+  explicit constexpr ConstexprOptional(Args&&...) : object_{} {}
+
+  // Enabled-state ctor for non armadillo types
+  template <bool C = Enabled,
+            std::enable_if_t<C && !is_arma_type_v<T>, int> = 0,
+            typename... Args>
   explicit constexpr ConstexprOptional(Args&&... args)
       : object_{std::forward<Args>(args)...} {}
 
- public:
-  // Empty state creator
-  template <bool C = Cond, typename = std::enable_if_t<!C>>
-  static constexpr ConstexprOptional empty() {
-    return ConstexprOptional{};
-  }
+  // Enabled-state ctor for armadillo types (the compiler prefers the
+  // initializer list ctor when using {} when we actually want to pre-allocate
+  template <bool C = Enabled, std::enable_if_t<C && is_arma_type_v<T>, int> = 0,
+            typename... Args>
+  explicit constexpr ConstexprOptional(Args&&... args)
+      : object_(std::forward<Args>(args)...) {}
 
-  // Public facing constuctor dispatch
-  template <typename... Args>
-  static constexpr ConstexprOptional make(Args&&... args) {
-    if constexpr (Cond) {
-      return ConstexprOptional{std::forward<Args>(args)...};  // enabled state
-    } else {
-      return empty();  // empty/disabled state
-    }
-  }
-
-  // Helper to clone data buffers by copying their dimensions without copying
-  // any data (copies the data for non-Eigen Matrix or Vector types)
-  [[nodiscard]] constexpr ConstexprOptional clone() const {
-    if constexpr (Cond) {
-      if constexpr (std::is_base_of_v<
-                        Eigen::PlainObjectBase<std::remove_cv_t<T>>,
-                        std::remove_cv_t<T>>) {
-        return make(object_.rows(), object_.cols());  // works for vectors too
-      } else {
-        return make(object_);
-      }
-    } else {
-      return empty();
-    }
-  }
+  // Retrieve whether the object is enabled or not
+  static constexpr bool enabled() noexcept { return Enabled; }
 
   // Retrieve underlying data (only enabled when cond == true)
-  template <bool C = Cond, typename = std::enable_if_t<C>>
+  template <bool C = Enabled, typename = std::enable_if_t<C>>
   [[nodiscard]] constexpr const T& value() const noexcept {
     static_assert(
-        Cond && C,
+        Enabled && C,
         "Attempting to retrieve an unset value of a ConstexprOptional object.");
     return object_;
   }
 
-  template <bool C = Cond, typename = std::enable_if_t<C>>
+  template <bool C = Enabled, typename = std::enable_if_t<C>>
   [[nodiscard]] constexpr T& value() noexcept {
     static_assert(
-        Cond && C,
+        Enabled && C,
         "Attempting to retrieve an unset value of a ConstexprOptional object.");
     return object_;
   }

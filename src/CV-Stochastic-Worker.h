@@ -1,82 +1,62 @@
 #ifndef CV_LM_CV_STOCHASTIC_WORKER_H
 #define CV_LM_CV_STOCHASTIC_WORKER_H
 
-#include <RcppEigen.h>
+#include <RcppArmadillo.h>
 #include <RcppParallel.h>
 
 #include <cstddef>
-#include <type_traits>
+#include <utility>
 
-#include "Enums.h"
+#include "ConstexprOptional.h"
+#include "DataLoader.h"
 #include "Utils-Decompositions.h"
-#include "Utils-Folds.h"
 
 namespace CV::Stochastic {
 
-template <typename WorkerModel, Enums::CenteringMethod Centering>
+template <typename Decomp>
 class Worker : public RcppParallel::Worker {
   // --- Data members
 
-  // One of the WorkerModel objects from OLS or Ridge namespaces in charge of
-  // fitting the model and evaluating out-of-sample performance
-  WorkerModel model_;
+  // Decomposition object for doing the math
+  Decomp decomp_;
 
-  // Container in charge of retrieving (and centering) test and training data
-  Utils::Folds::DataLoader<Centering> loader_;
+  // Data buffers to write training data into
+  arma::mat XtrainBuf_;
+  arma::vec yTrainBuf_;
 
-  // Reference to fold paritioning information
-  const Utils::Folds::DataSplitter& splitter_;
+  // Container in charge of retrieving test and training data
+  const DataLoader& loader_;
 
   // Accumulator
   double cvRes_;
 
-  // Number of rows in the design matrix (observations)
-  const Eigen::Index nrow_;
+  // Conditional data
+  ConstexprOptional<Decomp::requiresLambda, double> lambda_;
 
-  // Enum indicating success of singular value decompositions of training sets
-  Eigen::ComputationInfo info_;
+  // Boolean indicating success of decompositions
+  bool success_;
 
  public:
-  // --- Ctors
-
-  // OLS ctor
-  template <typename WM = WorkerModel,
-            typename = std::enable_if_t<!WM::requiresLambda>>
-  explicit Worker(const Eigen::VectorXd& ySorted,
-                  const Eigen::MatrixXd& xSorted,
-                  const Utils::Folds::DataSplitter& splitter,
-                  const double threshold)
-      : model_{xSorted.cols(), splitter.maxTrain(), splitter.maxTest(),
-               threshold},
-        loader_{ySorted, xSorted, splitter.maxTrain(), splitter.maxTest()},
-        splitter_{splitter},
+  // Main ctor
+  explicit Worker(Decomp decomp, const DataLoader& loader,
+                  const double lambda = 0.0)
+      : decomp_{std::move(decomp)},
+        XtrainBuf_(loader.maxTrain(), loader.ncol()),
+        yTrainBuf_(loader.maxTrain()),
+        loader_{loader},
         cvRes_{0.0},
-        nrow_{xSorted.rows()},
-        info_{Eigen::Success} {}
-
-  // Ridge ctor
-  template <typename WM = WorkerModel,
-            typename = std::enable_if_t<WM::requiresLambda>>
-  explicit Worker(const Eigen::VectorXd& ySorted,
-                  const Eigen::MatrixXd& xSorted,
-                  const Utils::Folds::DataSplitter& splitter,
-                  const double threshold, const double lambda)
-      : model_{xSorted.cols(), splitter.maxTrain(), splitter.maxTest(),
-               threshold, lambda},
-        loader_{ySorted, xSorted, splitter.maxTrain(), splitter.maxTest()},
-        splitter_{splitter},
-        cvRes_{0.0},
-        nrow_{xSorted.rows()},
-        info_{Eigen::Success} {}
+        lambda_{lambda},
+        success_{true} {}
 
   // Split ctor
   Worker(const Worker& other, const RcppParallel::Split)
-      : model_{other.model_},
+      : decomp_{other.decomp_.clone()},  // just copies tolerance
+        XtrainBuf_(other.XtrainBuf_.n_rows, other.XtrainBuf_.n_cols),
+        yTrainBuf_(other.yTrainBuf_.n_elem),
         loader_{other.loader_},
-        splitter_{other.splitter_},
         cvRes_{0.0},
-        nrow_{other.nrow_},
-        info_{other.info_} {}
+        lambda_{other.lambda_},
+        success_{other.success_} {}
 
   // Worker should only be copied via split ctor
   Worker(const Worker&) = delete;
@@ -84,54 +64,48 @@ class Worker : public RcppParallel::Worker {
 
   // Work operator for parallel reduction - each thread gets its own exclusive
   // range
-  void operator()(const std::size_t begin, const std::size_t end) override {
-    // Casting from std::size_t to Index is safe here (end is the number of
-    // folds which is a signed 32-bit integer from R)
-    const Eigen::Index endID{static_cast<Eigen::Index>(end)};
+  void operator()(const std::size_t foldStart,
+                  const std::size_t foldEnd) override {
+    // This is safe, foldEnd is bound by signed 32-bit integer value
+    const arma::uword endID{static_cast<arma::uword>(foldEnd)};
 
-    for (Eigen::Index testID{static_cast<Eigen::Index>(begin)}; testID < endID;
-         ++testID) {
-      // Extract where the test data set starts from (which rows) and how many
-      // observations are used in the test set
-      const auto [testStart, testSize]{splitter_[testID]};
+    for (arma::uword testID{static_cast<arma::uword>(foldStart)};
+         testID < endID; ++testID) {
+      // Load the test and training data sets
+      const auto [Xtest, yTest, testSize,
+                  trainSize]{loader_.load(testID, XtrainBuf_, yTrainBuf_)};
+      const arma::subview Xtrain{XtrainBuf_.head_rows(trainSize)};
+      const arma::subview_col yTrain{yTrainBuf_.head(trainSize)};
 
-      // Get the (potentially centered) test and training data sets
-      const auto [xTrain, yTrain, xTest,
-                  yTest]{loader_.prepData(testStart, testSize)};
-
-      // Evaluate out-of-sample performance
-      const double testMSE{model_.evalTestMSE(xTrain, yTrain, xTest, yTest)};
-
-      // Check whether computation was successful (we only need to check this in
-      // the ridge case since it uses singular value decomposition whereas OLS
-      // uses complete orthogonal decomposition which is documented to always be
-      // successful)
-      if constexpr (WorkerModel::canFail) {
-        if (const Eigen::ComputationInfo modelInfo{model_.getInfo()};
-            modelInfo != Eigen::Success) {
-          info_ = modelInfo;
-          return;
-        }
+      // Set the design matrix, response vector, and lambda
+      if constexpr (Decomp::requiresLambda) {
+        success_ = Utils::Decompositions::setParams(decomp_, Xtrain, yTrain,
+                                                    lambda_.value());
+      } else {
+        success_ = Utils::Decompositions::setParams(decomp_, Xtrain, yTrain);
       }
 
+      // Terminate early if a decomposition was unsuccessful
+      if (!success_) {
+        return;
+      }
+
+      // Evaluate out-of-sample performance
+      const double testMSE{decomp_.testMSE(Xtest, yTest)};
+
       // Weighted MSE contribution
-      const double wt{static_cast<double>(testSize) / nrow_};
+      const double wt{static_cast<double>(testSize) /
+                      static_cast<double>(loader_.nrow())};
       cvRes_ += (testMSE * wt);
     }
   }
 
   // Reduce results across multiple threads
   void join(const Worker& other) {
-    // Record unsuccessful decompositions for ridge instances
-    if constexpr (WorkerModel::canFail) {
-      if (info_ != Eigen::Success) {
-        return;
-      }
-
-      if (other.info_ != Eigen::Success) {
-        info_ = other.info_;
-        return;
-      }
+    // Make sure all decompositions were successful
+    if (!success_ || !other.success_) {
+      success_ = false;
+      return;
     }
 
     cvRes_ += other.cvRes_;
@@ -139,12 +113,12 @@ class Worker : public RcppParallel::Worker {
 
   // Retrieve final results
   [[nodiscard]] double getCV() const {
-    // Make sure singular value decomposition was successful before we return a
-    // result
-    if constexpr (WorkerModel::canFail) {
-      // Important we don't call this from a multithreaded context since
-      // Rcpp::stop will be called if any decomposition was unsuccessful
-      Utils::Decompositions::checkSvdInfo(info_);
+    // Make sure all decompositions were successful before returning a result
+    if (!success_) {
+      // getCV won't be called from a multithreaded context
+      Rcpp::stop(
+          "One or more decompositions were unsuccessul in evaluation of K-Fold "
+          "CV.");
     }
 
     return cvRes_;

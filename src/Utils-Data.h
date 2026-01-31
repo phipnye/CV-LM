@@ -1,61 +1,84 @@
 #ifndef CV_LM_UTILS_DATA_H
 #define CV_LM_UTILS_DATA_H
 
-#include <RcppEigen.h>
+#include <RcppArmadillo.h>
 
 namespace Utils::Data {
 
-// Assert the data is a column vector
-template <typename Derived>
-constexpr void assertColumnVector(const Eigen::MatrixBase<Derived>&) {
-  static_assert(Derived::ColsAtCompileTime == 1, "Expected a column vector");
+// Confirm the object is an arma object
+template <typename T>
+constexpr void assertArma() {
+  static_assert(arma::is_arma_type<T>::value,
+                "Passed a non-arma object when one was expected.");
 }
 
-// Assert the data is a dynamic matrix
-template <typename Derived>
-constexpr void assertMatrix(const Eigen::MatrixBase<Derived>&) {
-  static_assert(Derived::ColsAtCompileTime == Eigen::Dynamic,
-                "Expected a dynamic matrix");
+// Confirm the object is a generic matrix
+template <typename T>
+constexpr void assertMat() {
+  assertArma<T>();
+  static_assert(!T::is_col,
+                "Passed a column vector when a generic matrix was expected.");
 }
 
-// Assert x is a matrix and y is a column vector
-template <typename DerivedX, typename DerivedY>
-constexpr void assertDataStructure(const Eigen::MatrixBase<DerivedX>& x,
-                                   const Eigen::MatrixBase<DerivedY>& y) {
-  assertMatrix(x);
-  assertColumnVector(y);
+// Confirm the object is a column vector
+template <typename T>
+constexpr void assertVec() {
+  assertArma<T>();
+  static_assert(T::is_col,
+                "Passed a generic matrix when a column vector was expected.");
 }
 
 // Center the response vector
-template <typename Derived>
-[[nodiscard]] Eigen::VectorXd centerResponse(
-    const Eigen::MatrixBase<Derived>& y) {
-  assertColumnVector(y);
-  return Eigen::VectorXd{y.array() - y.mean()};
+template <typename T>
+[[nodiscard]] arma::vec centerResponse(const T& y) {
+  assertVec<T>();
+  return y - arma::mean(y);
+}
+
+// Center the response vector and store the mean
+template <typename T>
+void centerResponse(const T& y, double& yMean) {
+  assertVec<T>();
+  yMean = arma::mean(y);
+  y -= yMean;
+}
+
+// Center the response vector into another buffer and store the mean
+template <typename T>
+void centerResponse(const T& y, arma::vec& yCentered, double& yMean) {
+  assertVec<T>();
+  yMean = arma::mean(y);
+  yCentered = y - yMean;
 }
 
 // Center the design matrix
-template <typename Derived>
-[[nodiscard]] Eigen::MatrixXd centerPredictors(
-    const Eigen::MatrixBase<Derived>& x) {
-  assertMatrix(x);
-  return Eigen::MatrixXd{x.rowwise() - x.colwise().mean()};
+template <typename T>
+[[nodiscard]] arma::mat centerDesign(const T& X) {
+  // Subtract column means from the original design matrix
+  assertMat<T>();
+  arma::mat centeredX{X};
+  centeredX.each_row() -= arma::mean(X, 0);
+  return centeredX;
 }
 
-// Center the design matrix and response vectors into pre-allocated buffers
-template <typename DerivedX, typename DerivedY>
-void centerData(Eigen::MatrixBase<DerivedX>& x, Eigen::MatrixBase<DerivedY>& y,
-                Eigen::VectorXd& xColMeans, double& yMean) {
-  // Make sure data is what we expect
-  assertDataStructure(x, y);
-
+// Center the design matrix and store the column means
+template <typename T>
+void centerDesign(T& X, arma::rowvec& XcolMeans) {
   // Extract column means
-  xColMeans = x.colwise().mean();
-  yMean = y.mean();
+  assertMat<T>();
+  XcolMeans = arma::mean(X, 0);
 
   // Center the data
-  x.rowwise() -= xColMeans.transpose();
-  y.array() -= yMean;
+  X.each_row() -= XcolMeans;
+}
+
+// Center the design matrix into another buffer and store the column means
+template <typename T>
+void centerDesign(const T& X, arma::mat& Xcentered, arma::rowvec& XcolMeans) {
+  assertMat<T>();
+  XcolMeans = arma::mean(X, 0);
+  Xcentered = X;
+  Xcentered.each_row() -= XcolMeans;
 }
 
 }  // namespace Utils::Data

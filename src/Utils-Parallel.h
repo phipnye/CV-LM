@@ -5,14 +5,20 @@
 
 #include <cstddef>
 
-#include "Constants.h"
-
 namespace Utils::Parallel {
 
 template <typename Worker>
 void reduce(Worker& worker, std::size_t end, int nThreads) {
-  RcppParallel::parallelReduce(Constants::begin, end, worker,
-                               Constants::grainSize, nThreads);
+  constexpr std::size_t begin{0};
+
+  if (nThreads > 1) {
+    constexpr std::size_t grainSize{1};
+    RcppParallel::parallelReduce(begin, end, worker, grainSize, nThreads);
+    return;
+  }
+
+  // Directly call operator() if not multithreaded
+  worker(begin, end);
 }
 
 }  // namespace Utils::Parallel

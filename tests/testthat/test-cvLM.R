@@ -247,10 +247,10 @@ test_that("cvLM S3 methods return identical results", {
       K <- K %||% nrow(data.set)
 
       for (lambda in lambdas) {
-        common.args <- list(K.vals = K, lambda = lambda, seed = seed)
+        common.args <- list(data = data.set, K.vals = K, lambda = lambda, seed = seed)
         res.formula <- muffle(do.call(
           cvLM,
-          c(list(y ~ ., data = data.set), common.args)
+          c(list(y ~ .), common.args)
         ))
         res.lm <- muffle(do.call(cvLM, c(list(fit.lm), common.args)))
         expect_identical(res.formula, res.lm)

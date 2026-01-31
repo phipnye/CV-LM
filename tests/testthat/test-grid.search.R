@@ -10,7 +10,7 @@ gen.data <- function(n, p, sparse.p, noise.sd, rank.def = FALSE) {
   beta[sample.int(p, sparse.p)] <- 0
 
   # Rank-deficiency option
-  if (rank.def && p >= 3) {
+  if (rank.def && p > 2) {
     X[, p] <- X[, 1] + X[, 2]
   }
 
@@ -76,6 +76,9 @@ scenarios <- list(
   df.rd.mid
 )
 
+RhpcBLASctl::omp_set_num_threads(1L)
+RhpcBLASctl::blas_set_num_threads(1L)
+
 # --- Run tests
 
 test_that("grid.search matches brute-force cvLM sweep", {
@@ -113,20 +116,23 @@ test_that("grid.search matches brute-force cvLM sweep", {
             )
           ))
 
-          tm <- system.time({
-            manual.cvs <- vapply(
-              lambdas,
-              function(lambda) {
-                muffle(do.call(
-                  cvLM,
-                  c(common.args, list(K.vals = K, lambda = lambda))
-                ))$CV
-              },
-              numeric(1)
-            )
-          })
+          manual.cvs <- vapply(
+            lambdas,
+            function(lambda) {
+              muffle(do.call(
+                cvLM,
+                c(common.args, list(K.vals = K, lambda = lambda))
+              ))$CV
+            },
+            numeric(1)
+          )
 
           best.idx <- which.min(manual.cvs)
+          
+          if (grid.res$lambda != lambdas[best.idx]) {
+            browser()
+          }
+          
           expect_equal(grid.res$CV, manual.cvs[best.idx])
           expect_equal(grid.res$lambda, lambdas[best.idx])
         }
@@ -178,3 +184,4 @@ test_that("grid.search results are agnostic to the number of threads", {
     }
   }
 })
+
