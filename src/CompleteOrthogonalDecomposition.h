@@ -1,7 +1,6 @@
 #ifndef CV_LM_COMPLETEORTHOGONALDECOMPOSITION_H
 #define CV_LM_COMPLETEORTHOGONALDECOMPOSITION_H
 
-#include <R_ext/Lapack.h>
 #include <RcppArmadillo.h>
 
 #include <algorithm>
@@ -13,6 +12,15 @@
 #include "ConstexprOptional.h"
 #include "Enums.h"
 #include "Utils-Data.h"
+
+// Armadillo doesn't expose dormqr
+extern "C" {
+void F77_NAME(dormqr)(const char* side, const char* trans, const int* m,
+                      const int* n, const int* k, const double* a,
+                      const int* lda, const double* tau, double* c,
+                      const int* ldc, double* work, const int* lwork, int* info,
+                      std::size_t, std::size_t);
+}
 
 template <Enums::CrossValidationMethod CV, Enums::CenteringMethod Centering>
 class CompleteOrthogonalDecomposition {
