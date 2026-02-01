@@ -285,7 +285,7 @@ test_that("cvLM results are agnostic to the number of threads", {
 
   for (data.set in list(df.narrow, df.wide, df.rd, df.ill)) {
     for (K in K.vals) {
-      if (is.null(K)) {
+      if (is.na(K)) {
         next # LOOCV isn't multithreaded
       }
 

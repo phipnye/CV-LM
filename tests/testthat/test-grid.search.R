@@ -62,7 +62,7 @@ df.rd.mid <- gen.data(
 
 # --- Test parameters
 
-K.vals <- list(2, 5, 10, NULL)
+K.vals <- c(2, 5, 10, NA)
 seed <- 73568569
 max.lambda <- 100
 precision <- 0.5
