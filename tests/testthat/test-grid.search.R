@@ -76,9 +76,6 @@ scenarios <- list(
   df.rd.mid
 )
 
-RhpcBLASctl::omp_set_num_threads(1L)
-RhpcBLASctl::blas_set_num_threads(1L)
-
 # --- Run tests
 
 test_that("grid.search matches brute-force cvLM sweep", {
@@ -94,7 +91,10 @@ test_that("grid.search matches brute-force cvLM sweep", {
 
   for (data.set in scenarios) {
     for (K in K.vals) {
-      K <- K %||% nrow(data.set)
+      if (is.na(K)) {
+        K <- nrow(data.set)
+      }
+      
       is.loocv <- K == nrow(data.set)
       generalized.opts <- if (is.loocv) c(FALSE, TRUE) else FALSE
 
@@ -148,7 +148,10 @@ test_that("grid.search results are agnostic to the number of threads", {
 
   for (data.set in scenarios) {
     for (K in K.vals) {
-      K <- K %||% nrow(data.set)
+      if (is.na(K)) {
+        K <- nrow(data.set)
+      }
+      
       is.loocv <- K == nrow(data.set)
       generalized.opts <- if (is.loocv) c(FALSE, TRUE) else FALSE
 

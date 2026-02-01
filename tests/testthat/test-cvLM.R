@@ -36,7 +36,7 @@ df.wide <- gen.data(63, 117)
 
 # Test parameters
 seed <- 73568569
-K.vals <- list(2, 3, 4, 5, 7, 8, 10, NULL) # null corresponds to loocv
+K.vals <- c(2, 3, 4, 5, 7, 8, 10, NA) # null corresponds to loocv
 lambdas <- c(0.6148868, 48.08172, 7230.901)
 
 test_that("cvLM matches boot::cv.glm for OLS", {
@@ -51,7 +51,10 @@ test_that("cvLM matches boot::cv.glm for OLS", {
     is.wide <- nrow(data.set) < ncol(data.set)
 
     for (K in K.vals) {
-      K <- K %||% nrow(data.set) # LOOCV if null
+      # LOOCV
+      if (is.na(K)) {
+        K <- nrow(data.set)
+      }
 
       # Skip computing boot for wide LOOCV because diag(H) = 1 and we get zero division
       if (is.wide && K == nrow(data.set)) {
@@ -92,7 +95,10 @@ test_that("OLS CV is invariant to centering on narrow data", {
   # solutions)
   for (data.set in list(df.narrow, df.ill, df.rd)) {
     for (K in K.vals) {
-      K <- K %||% nrow(data.set)
+      if (is.na(K)) {
+        K <- nrow(data.set)
+      }
+      
       common.args <- list(
         y ~ .,
         data = data.set,
@@ -221,7 +227,10 @@ test_that("cvLM matches manual matrix algebra for Ridge (K-fold and GCV)", {
 
         # K-fold and LOOCV tests
         for (K in K.vals) {
-          K <- K %||% nrow(data.set)
+          if (is.na(K)) {
+            K <- nrow(data.set)
+          }
+          
           expect_equal(
             muffle(cvLM(
               y ~ .,
@@ -245,7 +254,9 @@ test_that("cvLM S3 methods return identical results", {
     fit.glm <- glm(y ~ ., data = data.set)
 
     for (K in K.vals) {
-      K <- K %||% nrow(data.set)
+      if (is.na(K)) {
+        K <- nrow(data.set)
+      }
 
       for (lambda in lambdas) {
         common.args <- list(
