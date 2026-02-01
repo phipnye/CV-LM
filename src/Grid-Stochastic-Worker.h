@@ -67,7 +67,7 @@ class Worker : public RcppParallel::Worker {
   // range
   void operator()(const std::size_t foldStart,
                   const std::size_t foldEnd) override {
-    // This is safe, foldEnd is bound by signed 32-bit integer value
+    // This is safe, foldEnd is bound by signed 32-bit integer values
     const arma::uword endID{static_cast<arma::uword>(foldEnd)};
 
     for (arma::uword testID{static_cast<arma::uword>(foldStart)};
@@ -133,7 +133,7 @@ class Worker : public RcppParallel::Worker {
     }
 
     // Find the smallest cv result
-    arma::uword bestIdx{cvs_.index_min()};
+    const arma::uword bestIdx{cvs_.index_min()};
 
     // Designated initializers not supported until C++20
     return LambdaCV{lambdasGrid_[bestIdx], cvs_[bestIdx]};

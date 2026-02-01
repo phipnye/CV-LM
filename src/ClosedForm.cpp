@@ -1,10 +1,10 @@
-#include "Stats.h"
+#include "ClosedForm.h"
 
 #include <RcppArmadillo.h>
 
 #include <algorithm>
 
-namespace Stats {
+namespace ClosedForm {
 
 // GCV = MSE / (1 - trace(H)/n)^2
 double gcv(const double rss, const double traceHat, const arma::uword nrow) {
@@ -47,4 +47,4 @@ double loocv(const arma::vec& residuals, const arma::vec& diagHat) {
       residuals / arma::clamp(1.0 - diagHat, 0.0, arma::datum::inf)));
 }
 
-}  // namespace Stats
+}  // namespace ClosedForm

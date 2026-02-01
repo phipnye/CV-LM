@@ -1,5 +1,5 @@
-#ifndef CV_LM_COMPLTEORTHOGONALDECOMPOSITION_H
-#define CV_LM_COMPLTEORTHOGONALDECOMPOSITION_H
+#ifndef CV_LM_COMPLETEORTHOGONALDECOMPOSITION_H
+#define CV_LM_COMPLETEORTHOGONALDECOMPOSITION_H
 
 #include <R_ext/Lapack.h>
 #include <RcppArmadillo.h>
@@ -9,9 +9,9 @@
 #include <cmath>
 #include <cstdint>
 
+#include "ClosedForm.h"
 #include "ConstexprOptional.h"
 #include "Enums.h"
-#include "Stats.h"
 #include "Utils-Data.h"
 
 template <Enums::CrossValidationMethod CV, Enums::CenteringMethod Centering>
@@ -43,6 +43,8 @@ class CompleteOrthogonalDecomposition {
   // Flags
   bool isDesignSet_{false};
   bool isResponseSet_{false};
+
+  // mutable: LAPACK applications may fail even in logically-const operations
   mutable bool success_{true};
 
   // Enum for differentiating the householders Q and Z
@@ -53,19 +55,18 @@ class CompleteOrthogonalDecomposition {
   explicit CompleteOrthogonalDecomposition(const double tolerance)
       : tolerance_{tolerance} {}
 
-  // For our use, we don't need a fully copy of the data (any such use would be
+  // For our use, we don't need a full copy of the data (any such use would be
   // erroneous) - instead we just need something to "clone" the tolerance
   CompleteOrthogonalDecomposition(const CompleteOrthogonalDecomposition&) =
       delete;
 
-  // Clone the decomposition by just copying the tolerance
-  [[nodiscard]] CompleteOrthogonalDecomposition clone() const noexcept {
+  // Create a new decomposition object sharing only the tolerance parameter
+  [[nodiscard]] CompleteOrthogonalDecomposition clone() const {
     return CompleteOrthogonalDecomposition{tolerance_};
   }
 
   // Move ctor
-  CompleteOrthogonalDecomposition(CompleteOrthogonalDecomposition&&) noexcept =
-      default;
+  CompleteOrthogonalDecomposition(CompleteOrthogonalDecomposition&&) = default;
 
   // Dtor
   ~CompleteOrthogonalDecomposition() = default;
@@ -83,7 +84,7 @@ class CompleteOrthogonalDecomposition {
     // Possibly centered design matrix
     Utils::Data::assertMat<T>();
 
-    if constexpr (XtrainColMeans_.enabled()) {
+    if constexpr (decltype(XtrainColMeans_)::isEnabled) {
       // Store the column means and center X into QR_
       Utils::Data::centerDesign(X0, QR_, XtrainColMeans_.value());
     } else {
@@ -92,22 +93,20 @@ class CompleteOrthogonalDecomposition {
 
     nrow_ = QR_.n_rows;
     ncol_ = QR_.n_cols;
-    success_ = colPivotQR();  // decompose XP = QR
 
-    // Make sure column-pivoted QR was successful
-    if (!success_) {
-      return success_;
+    // Decompose XP = QR
+    if (!colPivotQR()) {
+      return (success_ = false);
     }
 
     // Estimate rank: A pivot will be considered nonzero if its absolute value
-    // is greater than tolerance x |maxpivot| (unlike SVD, we don't explicitly
-    // zero out the pivots because unlike the singular values, pivots are not
-    // exclusively used for computations)
-    const arma::vec pivots{arma::abs(arma::diagvec(QR_))};
+    // is strictly greater than tolerance x |maxpivot|
+    arma::diagview pivots{QR_.diag()};
 
     // Diagonal entries of R are ordered from largest to smallest magnitude
     const double threshold{tolerance_ * std::abs(pivots[0])};
-    rank_ = arma::accu(pivots > threshold);
+    pivots.clean(threshold);
+    rank_ = arma::accu(pivots != 0.0);
 
     // --- Use QR decomposition of R1' to compute ZU
 
@@ -116,23 +115,17 @@ class CompleteOrthogonalDecomposition {
 
     if (rank_ > 0) {
       for (arma::uword col{0}; col < ncol_; ++col) {
-        // Ensure row does not exceed the rank OR the physical rows of QR_
-        const arma::uword maxRow = std::min(col, rank_ - 1);
+        // Ensure row does not exceed the rank or the physical rows of QR_
+        const arma::uword maxRow{std::min(col, rank_ - 1)};
 
         for (arma::uword row{0}; row <= maxRow; ++row) {
-          ZU_(row, col) = QR_(row, col);
+          ZU_.at(row, col) = QR_.at(row, col);
         }
       }
     }
 
     arma::inplace_trans(ZU_);
-    success_ = econQR();  // decompose R1 = ZU
-
-    // Ensure economic QR decomposition of R1' was successful
-    if (!success_) {
-      return success_;
-    }
-
+    success_ = econQR();  // decompose R1' = ZU
     isDesignSet_ = success_;
     return success_;
   }
@@ -145,23 +138,30 @@ class CompleteOrthogonalDecomposition {
     assert(y0.n_elem == nrow_);
 
     // Potentially centered response vector
-    const arma::vec& y{meanCenter ? Utils::Data::centerResponse(y0) : y0};
+    using ResponseType =
+        std::conditional_t<meanCenter, const arma::vec, const T&>;
+    ResponseType y{[&]() -> ResponseType {
+      if constexpr (meanCenter) {
+        return Utils::Data::centerResponse(y0);
+      } else {
+        return y0;
+      }
+    }()};
 
     // Projection of y onto orthonormal basis for column space of X see ESL p.55
     QTy_ = y;
-    success_ = applyHouseholderOnLeft(QTy_, Householder::Q, true);
 
-    if (!success_) {
-      return success_;
+    if (!applyHouseholderOnLeft(QTy_, Householder::Q, true)) {
+      return (success_ = false);
     }
 
     // Response average
-    if constexpr (yTrainMean_.enabled()) {
+    if constexpr (decltype(yTrainMean_)::isEnabled) {
       yTrainMean_.value() = arma::mean(y0);
     }
 
     // Total sum of squares
-    if constexpr (tss_.enabled()) {
+    if constexpr (decltype(tss_)::isEnabled) {
       tss_.value() = arma::dot(y, y);
     }
 
@@ -174,19 +174,16 @@ class CompleteOrthogonalDecomposition {
             typename = std::enable_if_t<deterministic>>
   [[nodiscard]] double cv() const {
     // For COD, lapack applications could fail either during one of the two QR
-    // decompositions or applying Q to a matrix or vector, hence more careful
-    // success checking is required - while the additional checks aren't ideal
-    // for release mode, COD won't be used in hot loops so the overhead is
-    // minimal
+    // decompositions or applying householder transformations to a matrix or
+    // vector, hence more careful success checking is required
 
     if constexpr (gcv) {
       // rss() and traceHat() do not call lapack and hence the unsuccessful
-      // states would only occur when setting the design matrix which the user
-      // should have already handled
+      // states should have already been handled
       assert(isReady() &&
              "Attempting to compute GCV values while COD is not in a complete "
              "state.");
-      return Stats::gcv(rss(), traceHat(), nrow_);
+      return ClosedForm::gcv(rss(), traceHat(), nrow_);
     } else {
       // residuals() and diagHat() both call lapack, so we gather their values
       // first and then check
@@ -202,7 +199,7 @@ class CompleteOrthogonalDecomposition {
       }
 
       const arma::vec diagH{diagHat()};
-      return isReady() ? Stats::loocv(resid, diagH) : arma::datum::nan;
+      return isReady() ? ClosedForm::loocv(resid, diagH) : arma::datum::nan;
     }
   }
 
@@ -214,10 +211,6 @@ class CompleteOrthogonalDecomposition {
     Enums::assertExpected<CV, Enums::CrossValidationMethod::KCV>();
     Utils::Data::assertMat<TX>();
     Utils::Data::assertVec<TY>();
-
-    // The only failures for COD should come from the QR decompositions which
-    // should be checked by the user immediately upon setting the design matrix,
-    // other instances are misuses
     assert(isReady() &&
            "Attempting to evaluate out-of-sample performance while COD is not "
            "in a complete state.");
@@ -231,7 +224,7 @@ class CompleteOrthogonalDecomposition {
       const double offset{yTrainMean_.value() -
                           arma::dot(XtrainColMeans_.value(), beta)};
 
-      // Residual = y_test - (X_test * beta + offset)
+      // Residual = y_test - ((X_test * beta) + offset)
       return arma::mean(arma::square(yTest - ((Xtest * beta) + offset)));
     } else {
       // Standard calculation for non-centered data
@@ -260,7 +253,7 @@ class CompleteOrthogonalDecomposition {
 
   // Compute sum of squared residuals
   [[nodiscard]] double rss() const {
-    // Fully-saturated model
+    // Fully-saturated model (including implicit intercept if centered)
     if (rank_ + (meanCenter ? 1u : 0u) == nrow_) {
       return 0.0;
     }
@@ -273,7 +266,8 @@ class CompleteOrthogonalDecomposition {
   }
 
   [[nodiscard]] arma::vec residuals() const {
-    if (rank_ + (meanCenter ? 1u : 0) == nrow_) {
+    // Fully-saturated model (including implicit intercept if centered)
+    if (rank_ + (meanCenter ? 1u : 0u) == nrow_) {
       return arma::zeros(nrow_);
     }
 
@@ -319,7 +313,7 @@ class CompleteOrthogonalDecomposition {
   }
 
   // Internal helper to do column-pivoted QR decomposition in lapack without
-  // computing full n x n matrix Q
+  // forming full n x n matrix Q
   [[nodiscard]] bool colPivotQR() {
     // --- LAPACK dgeqp3: Column-pivoted QR
     /* From the docs:
@@ -347,6 +341,11 @@ class CompleteOrthogonalDecomposition {
     double workQuery;
     arma::lapack::geqp3(&m, &n, QR_.memptr(), &lda, jpvt.memptr(),
                         Qtau_.memptr(), &workQuery, &lwork, &info);
+
+    if (info != 0) {
+      return false;
+    }
+
     lwork = static_cast<int>(workQuery);
     arma::vec work(lwork);
 
@@ -365,7 +364,7 @@ class CompleteOrthogonalDecomposition {
   }
 
   // Internal helper to do economic QR decomposition in lapack without
-  // computing the full orthogonal matrix
+  // forming the full orthogonal matrix
   [[nodiscard]] bool econQR() {
     /* --- LAPACK dgeqrf: Economic QR factorization
      * From the docs:
@@ -391,6 +390,11 @@ class CompleteOrthogonalDecomposition {
     // Workspace query
     arma::lapack::geqrf(&m, &n, ZU_.memptr(), &lda, Ztau_.memptr(), &workQuery,
                         &lwork, &info);
+
+    if (info != 0) {
+      return false;
+    }
+
     lwork = static_cast<int>(workQuery);
     arma::vec work(lwork);
 
@@ -424,7 +428,8 @@ class CompleteOrthogonalDecomposition {
     const arma::mat& Q{householder == Householder::Q ? QR_ : ZU_};
     const arma::vec& tau{householder == Householder::Q ? Qtau_ : Ztau_};
 
-    // Make sure dimensions align
+    // Make sure dimensions align (for left-application, A and Q must have
+    // matching row dimensions)
     if (A.n_rows != Q.n_rows) {
       return false;
     }
@@ -444,19 +449,24 @@ class CompleteOrthogonalDecomposition {
     constexpr std::size_t charLen{1};  // both side and trans are a single char
 
     // Query workspace
-    F77_CALL(dormqr)(&side, &trans, &m, &n, &k, Q.memptr(), &lda, tau.memptr(),
-                     A.memptr(), &ldc, &workQuery, &lwork, &info, charLen,
-                     charLen);
+    F77_CALL(dormqr)
+    (&side, &trans, &m, &n, &k, Q.memptr(), &lda, tau.memptr(), A.memptr(),
+     &ldc, &workQuery, &lwork, &info, charLen, charLen);
+
+    if (info != 0) {
+      return false;
+    }
+
     lwork = static_cast<int>(workQuery);
     arma::vec work(lwork);
 
     // Apply Q on left in-place
-    F77_CALL(dormqr)(&side, &trans, &m, &n, &k, Q.memptr(), &lda, tau.memptr(),
-                     A.memptr(), &ldc, work.memptr(), &lwork, &info, charLen,
-                     charLen);
+    F77_CALL(dormqr)
+    (&side, &trans, &m, &n, &k, Q.memptr(), &lda, tau.memptr(), A.memptr(),
+     &ldc, work.memptr(), &lwork, &info, charLen, charLen);
 
     return info == 0;  // whether the application was successful or not
   }
 };
 
-#endif  // CV_LM_COMPLTEORTHOGONALDECOMPOSITION_H
+#endif  // CV_LM_COMPLETEORTHOGONALDECOMPOSITION_H

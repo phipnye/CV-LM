@@ -7,7 +7,16 @@ is.wholenumber <- function(x, tol = .Machine$double.eps^0.5) {
 }
 
 .is_lm <- function(model) {
-  inherits(model, "lm")
+  if (!inherits(model, "lm")) {
+    return(FALSE)
+  }
+
+  # If it's a GLM, it's only "linear regression" if family is gaussian/identity
+  if (inherits(model, "glm")) {
+    return(model$family$family == "gaussian" && model$family$link == "identity")
+  }
+
+  TRUE
 }
 
 .assert_scalar <- function(x, type, name) {

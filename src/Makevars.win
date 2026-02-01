@@ -4,6 +4,9 @@ CXX_STD = CXX17
 # Link agaist lapack and blas
 PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
+# Disable openmp to prevent oversubscription
+PKG_CXXFLAGS += -DARMA_DONT_USE_OPENMP 
+
 # Link against RcppParallel
 PKG_CXXFLAGS += -DRCPP_PARALLEL_USE_TBB=1
 PKG_LIBS += $(shell "${R_HOME}/bin${R_ARCH_BIN}/Rscript.exe" -e "RcppParallel::RcppParallelLibs()")

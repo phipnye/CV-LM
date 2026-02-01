@@ -20,7 +20,8 @@ grid.search(formula, data, subset, na.action, K = 10L,
   ignored.}
   \item{seed}{an integer used to initialize the random number generator for reproducible K-fold splits.}
   \item{n.threads}{an integer specifying the number of threads. For K-fold CV, parallelization occurs across
-  folds; for GCV/LOOCV, it occurs across the \code{lambda} grid.}
+  folds; for GCV/LOOCV, it occurs across the \code{lambda} grid. Set to -1 to use the \code{RcppParallel}
+  default (\code{\link[RcppParallel]{defaultNumThreads}}).}
   \item{tol}{numeric scalar specifying the tolerance for rank estimation in the SVD. See \code{\link{cvLM}}.}
   \item{max.lambda}{numeric scalar for the maximum \eqn{\lambda} value in the search grid.}
   \item{precision}{numeric scalar specifying the step size (increment) between \eqn{\lambda} values in the
@@ -56,6 +57,7 @@ grid.search(formula, data, subset, na.action, K = 10L,
   \code{\link{cvLM}}
 }
 \examples{
+\dontrun{
 data(mtcars)
 grid.search(
   formula = mpg ~ ., 
@@ -72,5 +74,5 @@ grid.search(
   max.lambda = 10000,  # Search values between 0 and 10000
   precision = 0.5      # Increment in steps of 0.5
 )
-
+}
 }

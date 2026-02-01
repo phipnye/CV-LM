@@ -10,6 +10,11 @@
 // accidental access when no value is set
 template <bool Enabled, typename T>
 class ConstexprOptional {
+ public:
+  // Retrieve whether the object is enabled or not
+  static constexpr bool isEnabled{Enabled};
+
+ private:
   // No set value placeholder
   struct EmptyState {};
 
@@ -18,14 +23,14 @@ class ConstexprOptional {
 
   // Detect if the type is an arma type
   template <typename U>
-  static constexpr bool is_arma_type_v = arma::is_arma_type<U>::value;
+  static constexpr bool is_arma_type_v{arma::is_arma_type<U>::value};
 
  public:
   // Disabled-state ctor
   template <bool C = Enabled, std::enable_if_t<!C, int> = 0, typename... Args>
   explicit constexpr ConstexprOptional(Args&&...) : object_{} {}
 
-  // Enabled-state ctor for non armadillo types
+  // Enabled-state ctor for non-armadillo types
   template <bool C = Enabled,
             std::enable_if_t<C && !is_arma_type_v<T>, int> = 0,
             typename... Args>
@@ -38,9 +43,6 @@ class ConstexprOptional {
             typename... Args>
   explicit constexpr ConstexprOptional(Args&&... args)
       : object_(std::forward<Args>(args)...) {}
-
-  // Retrieve whether the object is enabled or not
-  static constexpr bool enabled() noexcept { return Enabled; }
 
   // Retrieve underlying data (only enabled when cond == true)
   template <bool C = Enabled, typename = std::enable_if_t<C>>

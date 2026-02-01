@@ -32,7 +32,8 @@ template <Enums::CrossValidationMethod CV, Enums::CenteringMethod Centering>
     CompleteOrthogonalDecomposition<CV, Centering> cod{tolerance};
 
     if (!Utils::Decompositions::setParams(cod, X, y)) {
-      Rcpp::stop("QR decomposition of the design matrix failed.");
+      Rcpp::stop(
+          "Complete orthogonal decomposition of the design matrix failed.");
     }
 
     return cod.cv();

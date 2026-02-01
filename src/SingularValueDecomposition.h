@@ -7,9 +7,9 @@
 #include <cassert>
 #include <type_traits>
 
+#include "ClosedForm.h"
 #include "ConstexprOptional.h"
 #include "Enums.h"
-#include "Stats.h"
 #include "Utils-Data.h"
 
 template <Enums::CrossValidationMethod CV, Enums::CenteringMethod Centering>
@@ -57,16 +57,17 @@ class SingularValueDecomposition {
   explicit SingularValueDecomposition(const double tolerance)
       : tolerance_{tolerance} {}
 
-  // Copy ctor
+  // Copy ctor (copying is allowed for this class since determinstic workers
+  // require the full decomposition - "cloning" is insufficient)
   SingularValueDecomposition(const SingularValueDecomposition& other) = default;
 
-  // Clone the decomposition by just copying the tolerance
-  [[nodiscard]] SingularValueDecomposition clone() const noexcept {
+  // Create a new decomposition object sharing only the tolerance parameter
+  [[nodiscard]] SingularValueDecomposition clone() const {
     return SingularValueDecomposition{tolerance_};
   }
 
   // Move ctor
-  SingularValueDecomposition(SingularValueDecomposition&&) noexcept = default;
+  SingularValueDecomposition(SingularValueDecomposition&&) = default;
 
   // Dtor
   ~SingularValueDecomposition() = default;
@@ -88,6 +89,7 @@ class SingularValueDecomposition {
       if constexpr (meanCenter) {
         if constexpr (kcv) {
           arma::mat Xcentered{X0};
+          // Store train colmeans so we can apply to test set
           Utils::Data::centerDesign(Xcentered, XtrainColMeans_.value());
           return Xcentered;
         } else {
@@ -101,7 +103,7 @@ class SingularValueDecomposition {
     // We use economic SVD (U [n x p], V [p x p]) - only compute V for K-fold so
     // we can compute coefficients that can be applied to out-of-sample
     // observations
-    if constexpr (V_.enabled()) {
+    if constexpr (decltype(V_)::isEnabled) {
       success_ = arma::svd_econ(U_, diagD_, V_.value(), X);
     } else {
       // Only compute left singular vectors
@@ -118,16 +120,16 @@ class SingularValueDecomposition {
     ncol_ = X.n_cols;
 
     // Estimate rank: A singular value will be considered nonzero if its value
-    // is greater than tolerance x maxsingularvalue
+    // is strictly greater than tolerance x maxsingularvalue
     const double threshold{tolerance_ * diagD_[0]};
-    rank_ = arma::accu(diagD_ > threshold);
-    diagD_.tail(diagD_.n_elem - rank_).zeros();
+    diagD_.clean(threshold);
+    rank_ = arma::accu(diagD_ != 0.0);
     diagDsq_ = arma::square(diagD_);
     isDesignSet_ = success_;
     return success_;
   }
 
-  // Set the response vector (always returns true)
+  // Set the response vector (always returns true - no LAPACK calls)
   template <typename T>
   bool setResponse(const T& y0) {
     Utils::Data::assertVec<T>();
@@ -135,7 +137,7 @@ class SingularValueDecomposition {
     assert(y0.n_elem == nrow_);
 
     // Potentially centered response vector
-    if constexpr (y_.enabled()) {
+    if constexpr (decltype(y_)::isEnabled) {
       y_.value() = meanCenter ? Utils::Data::centerResponse(y0) : y0;
     }
 
@@ -146,7 +148,7 @@ class SingularValueDecomposition {
     ResponseType y{[&]() -> ResponseType {
       if constexpr (!meanCenter) {
         return y0;
-      } else if constexpr (y_.enabled()) {
+      } else if constexpr (decltype(y_)::isEnabled) {
         return y_.value();
       } else {
         return Utils::Data::centerResponse(y0);
@@ -154,13 +156,13 @@ class SingularValueDecomposition {
     }()};
 
     // Projection of y onto left singular values of X (U'y)
-    if constexpr (UTy_.enabled()) {
+    if constexpr (decltype(UTy_)::isEnabled) {
       UTy_.value() = U_.t() * y;
     }
 
     // Squared projection values
-    if constexpr (UTySq_.enabled()) {
-      if constexpr (UTy_.enabled()) {
+    if constexpr (decltype(UTySq_)::isEnabled) {
+      if constexpr (decltype(UTy_)::isEnabled) {
         UTySq_.value() = arma::square(UTy_.value());
       } else {
         UTySq_.value() = arma::square(U_.t() * y);
@@ -168,12 +170,12 @@ class SingularValueDecomposition {
     }
 
     // Response average
-    if constexpr (yTrainMean_.enabled()) {
+    if constexpr (decltype(yTrainMean_)::isEnabled) {
       yTrainMean_.value() = arma::mean(y0);
     }
 
     // Total sum of squares
-    if constexpr (tss_.enabled()) {
+    if constexpr (decltype(tss_)::isEnabled) {
       tss_.value() = arma::dot(y, y);
     }
 
@@ -190,13 +192,13 @@ class SingularValueDecomposition {
     useOLS_ = lambda <= 0.0;
 
     if (useOLS_) {
-      if constexpr (singularShrink_.enabled()) {
+      if constexpr (decltype(singularShrink_)::isEnabled) {
         // Singular shrinkage values simplify to 1 / diag(D) for lambda == 0.0
         singularShrink_.value().zeros(diagD_.n_elem);
         singularShrink_.value().head(rank_) = 1.0 / diagD_.head(rank_);
       }
 
-      if constexpr (coordShrink_.enabled()) {
+      if constexpr (decltype(coordShrink_)::isEnabled) {
         // Coordinate shrinkage factors simplify to 1 for lamdab == 0.0
         coordShrink_.value() = arma::ones(diagD_.n_elem);
       }
@@ -206,13 +208,13 @@ class SingularValueDecomposition {
     }
 
     // Singular shrinkage factor = d_j / (d_j^2 + lambda)
-    if constexpr (singularShrink_.enabled()) {
+    if constexpr (decltype(singularShrink_)::isEnabled) {
       singularShrink_.value() = diagD_ / (diagDsq_ + lambda);
     }
 
     // Coordinate shrinkage factors = d_j^2 / (d_j^2 + lambda) see ESL p.66
-    if constexpr (coordShrink_.enabled()) {
-      if constexpr (singularShrink_.enabled()) {
+    if constexpr (decltype(coordShrink_)::isEnabled) {
+      if constexpr (decltype(singularShrink_)::isEnabled) {
         coordShrink_.value() = diagD_ % singularShrink_.value();
       } else {
         coordShrink_.value() = diagDsq_ / (diagDsq_ + lambda);
@@ -234,10 +236,10 @@ class SingularValueDecomposition {
            "a complete state.");
 
     if constexpr (gcv) {
-      return Stats::gcv(rss(), traceHat(), nrow_);
+      return ClosedForm::gcv(rss(), traceHat(), nrow_);
     } else {
       Enums::assertExpected<CV, Enums::CrossValidationMethod::LOOCV>();
-      return Stats::loocv(residuals(), diagHat());
+      return ClosedForm::loocv(residuals(), diagHat());
     }
   }
 

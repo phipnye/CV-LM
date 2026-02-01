@@ -40,10 +40,11 @@ K.vals <- list(2, 3, 4, 5, 7, 8, 10, NULL) # null corresponds to loocv
 lambdas <- c(0.6148868, 48.08172, 7230.901)
 
 test_that("cvLM matches boot::cv.glm for OLS", {
-  # Note: cvLM will not match boot::cv.glm for matrices that are wide, R's lm uses dqrc2/linpack,
-  # which gives a least-squares solution on overdetermined systems by placing 0 coefficients on redundant
-  # covariates, cvLM instead estimates using the unique minimum norm solution; however, this will only
-  # affect out-of-sample predictions on wide data sets
+  # Note: cvLM will not match boot::cv.glm for matrices that are wide, R's lm gives a least-squares solution
+  # on overdetermined systems by placing 0 coefficients on redundant covariates, cvLM instead estimates using
+  # the unique minimum norm solution; however, this will only affect out-of-sample predictions on wide data
+  # sets
+  skip_if_not_installed("boot")
 
   for (data.set in list(df.narrow, df.ill, df.rd, df.wide)) {
     fit.glm <- glm(y ~ ., data = data.set)
@@ -247,7 +248,12 @@ test_that("cvLM S3 methods return identical results", {
       K <- K %||% nrow(data.set)
 
       for (lambda in lambdas) {
-        common.args <- list(data = data.set, K.vals = K, lambda = lambda, seed = seed)
+        common.args <- list(
+          data = data.set,
+          K.vals = K,
+          lambda = lambda,
+          seed = seed
+        )
         res.formula <- muffle(do.call(
           cvLM,
           c(list(y ~ .), common.args)

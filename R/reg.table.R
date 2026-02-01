@@ -40,42 +40,24 @@
 }
 
 .build_stats_mat <- function(models, stats, n.digits, big.mark, cv.args) {
-  stats.ncv <- setdiff(stats, "CV")
   n.models <- length(models)
-
-  stats.mat <-
-    if ((n.stats <- length(stats.ncv)) > 1L) {
-      sapply(
-        models,
-        function(model) {
-          vapply(
-            stats.ncv,
-            .get_stat_value,
-            character(1L),
-            model = model,
-            n.digits = n.digits,
-            big.mark = big.mark
-          )
-        },
-        simplify = TRUE
+  stats.mat <- do.call(
+    rbind,
+    lapply(models, function(model) {
+      summ <- summary(model)
+      c(
+        AIC = .fmt(stats::AIC(model), n.digits, big.mark),
+        BIC = .fmt(stats::BIC(model), n.digits, big.mark),
+        r.squared = .fmt(summ$r.squared, n.digits, big.mark),
+        adj.r.squared = .fmt(summ$adj.r.squared, n.digits, big.mark),
+        fstatistic = .fmt(summ$fstatistic["value"], n.digits, big.mark),
+        nobs = as.character(length(model$residuals))
       )
-    } else if (n.stats == 1L) {
-      matrix(
-        vapply(
-          models,
-          .get_stat_value,
-          character(1L),
-          stat = stats.ncv,
-          n.digits = n.digits,
-          big.mark = big.mark
-        ),
-        nrow = 1L,
-        ncol = n.models,
-        dimnames = list(stats.ncv, NULL)
-      )
-    } else {
-      matrix(nrow = 0L, ncol = n.models)
-    }
+    })
+  )
+  
+  # Transpose so stats are rows, models are columns
+  stats.mat <- t(stats.mat)
 
   if ("CV" %in% stats) {
     CV <- vapply(
@@ -84,6 +66,7 @@
       numeric(1L)
     )
     stats.mat <- rbind(stats.mat, .fmt(CV, n.digits, big.mark))
+    rownames(stats.mat)[nrow(stats.mat)] <- "CV"
   }
 
   stats.mat[stats, , drop = FALSE]
@@ -210,8 +193,8 @@ html <- function(models, n.digits, big.mark, caption, spacing, stats, cv.args) {
 reg.table <- function(
   models,
   type = c("latex", "html"),
-  split.size = 4L,
-  n.digits = 3L,
+  split.size = 4,
+  n.digits = 3,
   big.mark = "",
   caption = "Regression Results",
   spacing = 5,
@@ -226,36 +209,38 @@ reg.table <- function(
   ),
   ...
 ) {
+  # Make sure all of the models are linear regression models
   if (!all(vapply(models, .is_lm, logical(1L)))) {
     stop("All models should be a linear regression model.", call. = FALSE)
   }
 
+  # --- Validate arguments
+  type <- match.arg(type, c("latex", "html"))
+  split.size <- .assert_integer_scalar(split.size, "split.size", nonneg = TRUE)
+  n.digits <- .assert_integer_scalar(n.digits, "n.digits", nonneg = TRUE)
+  .assert_scalar(big.mark, is.character, "big.mark")
+  .assert_scalar(big.mark, is.character, "caption")
+  spacing <- .assert_double_scalar(spacing, "spacing", nonneg = TRUE)
   stats <- match.arg(
     stats,
     c("CV", "AIC", "BIC", "r.squared", "adj.r.squared", "fstatistic", "nobs"),
     TRUE
   )
 
-  if (length(split.size) != 1L || !is.integer(split.size)) {
-    stop("Argument 'split.size' must be a single integer value.", call. = FALSE)
-  }
-
   model.chunks <- split(models, ceiling(seq_along(models) / split.size))
-  type <- match.arg(type, c("latex", "html"))
   TBL.FUN <- .get_fun(type)
-  n.digits <- .assert_integer_scalar(n.digits, "n.digits", nonneg = TRUE)
-  .assert_scalar(big.mark, is.character, "big.mark")
-  .assert_scalar(caption, is.character, "caption")
-  spacing <- .assert_double_scalar(spacing, "spacing", nonneg = TRUE)
   cv.args <- list(...)
-  cv.argnames <- names(cv.args)
 
   if (length(cv.args$K.vals) > 1L) {
     stop("Argument 'K.vals' must be a single integer value.", call. = FALSE)
   }
 
-  # TO DO: Add warnings for when model statistics won't align with CV results (like introducing a lambda > 0
-  # on a linear model)
+  if (!is.null(cv.args$lambda) && cv.args$lambda > 0) {
+    warning(
+      "For lambda > 0, the reported CV value is based on a ridge regression model, while the reported",
+      "coefficients and statistics correspond to a standard linear regression model (lambda = 0)."
+    )
+  }
 
   vapply(
     model.chunks,

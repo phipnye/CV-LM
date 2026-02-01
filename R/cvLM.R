@@ -1,4 +1,4 @@
-## cvLM.R: Fast cross-validation for linear and ridge regression models using RcppEigen
+## cvLM.R: Fast cross-validation for linear and ridge regression models using RcppArmadillo
 ##
 ## This file is part of the cvLM package.
 

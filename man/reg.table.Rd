@@ -24,7 +24,7 @@ reg.table(models, type = c("latex", "html"), split.size = 4L, n.digits = 3L,
     \describe{
       \item{\code{AIC}}{Akaike Information Criterion}
       \item{\code{BIC}}{Bayesian Information Criterion}
-      \item{\code{CV}}{Cross-validation score}
+      \item{\code{CV}}{Cross-validation metric}
       \item{\code{r.squared}}{R-squared}
       \item{\code{adj.r.squared}}{Adjusted R-squared}
       \item{\code{fstatistic}}{F-statistic}
@@ -40,6 +40,7 @@ reg.table(models, type = c("latex", "html"), split.size = 4L, n.digits = 3L,
   A character vector of length equal to the number of tables with each element containing the LaTeX or HTML code for a regression table.
 }
 \examples{
+\dontrun{
 data(mtcars)
 
 # Create a list of 6 different linear regression models with names
@@ -82,4 +83,5 @@ reg.table(
   K.vals = 5L,
   seed = 123L
 )
+}
 }

@@ -19,7 +19,7 @@ Generator::Generator(const double maxLambda, const double precision)
           Rcpp::stop("max.lambda must be > 0");
         }
 
-        // --- Make sure we can fit the grid size in an Eigen::Index and a
+        // --- Make sure we can fit the grid size in an arma::uword and a
         // std::size_t
 
         const double floorDiv{std::floor(maxLambda / precision)};
@@ -33,7 +33,7 @@ Generator::Generator(const double maxLambda, const double precision)
 
         // Determine the absolute ceiling for the grid size (througout our code,
         // we need to be able to convert the size to a std::size_t and an
-        // Eigen::Index)
+        // arma::uword)
         constexpr double limitArma{
             static_cast<double>(std::numeric_limits<arma::uword>::max())};
         constexpr double limitSizeT{

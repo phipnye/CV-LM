@@ -1,9 +1,12 @@
-^LICENSE\.md$
 ^.*\.Rproj$
 ^\.Rproj\.user$
-^compile_commands\.json$
-^\.idea$
-^tests$
 ^\.git$
 ^\.gitignore$
+^\.idea$
+^bench$
+^compile_commands\.json$
 ^\.clang-format$
+^src/.*\.o$
+^src/.*\.so$
+^src/.*\.dll$
+^LICENSE\.md$

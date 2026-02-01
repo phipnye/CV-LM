@@ -62,7 +62,7 @@ DataLoader::DataLoader(const arma::mat& X, const arma::vec& y, const int seed,
 }
 
 DataLoader::LoadValues DataLoader::load(const arma::uword testID,
-                                        arma::mat& XtrainBufT,
+                                        arma::mat& XtrainBuf,
                                         arma::vec& yTrainBuf) const {
   // Retrieve the indexes of the test set
   const arma::uword testStart{testStarts_[testID]};
@@ -72,12 +72,12 @@ DataLoader::LoadValues DataLoader::load(const arma::uword testID,
   // --- Load training data into buffers
 
   // Copy rows before the test fold
-  XtrainBufT.head_rows(testStart) = Xsorted_.head_rows(testStart);
+  XtrainBuf.head_rows(testStart) = Xsorted_.head_rows(testStart);
   yTrainBuf.head(testStart) = ySorted_.head(testStart);
 
   // Copy rows after the test fold into the remaining buffer space
   if (const arma::uword nTrailing{trainSize - testStart}; nTrailing > 0) {
-    XtrainBufT.rows(testStart, testStart + nTrailing - 1) =
+    XtrainBuf.rows(testStart, testStart + nTrailing - 1) =
         Xsorted_.tail_rows(nTrailing);
     yTrainBuf.subvec(testStart, testStart + nTrailing - 1) =
         ySorted_.tail(nTrailing);

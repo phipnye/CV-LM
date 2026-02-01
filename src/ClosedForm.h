@@ -1,9 +1,9 @@
-#ifndef CV_LM_STATS_H
-#define CV_LM_STATS_H
+#ifndef CV_LM_CLOSEDFORM_H
+#define CV_LM_CLOSEDFORM_H
 
 #include <RcppArmadillo.h>
 
-namespace Stats {
+namespace ClosedForm {
 
 // Closed-form solution for generalized cross-validation
 [[nodiscard]] double gcv(double rss, double traceHat, arma::uword nrow);
@@ -12,6 +12,6 @@ namespace Stats {
 [[nodiscard]] double loocv(const arma::vec& residuals,
                            const arma::vec& diagHat);
 
-}  // namespace Stats
+}  // namespace ClosedForm
 
-#endif  // CV_LM_STATS_H
+#endif  // CV_LM_CLOSEDFORM_H

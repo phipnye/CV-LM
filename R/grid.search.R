@@ -71,6 +71,26 @@ grid.search <- function(
   # Make sure K is still valid
   K <- .assert_valid_kvals(K, nrow(X))
 
+  # Limit number of threads for K-fold to the number necessary
+  if (!generalized && K != nrow(X)) {
+    n.threads <- min(n.threads, K)
+  }
+
+  # Try to prevent from oversubscription
+  if (n.threads > 1L) {
+    if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+      old.blas.threads <- RhpcBLASctl::blas_get_num_procs()
+      RhpcBLASctl::blas_set_num_threads(1L)
+      on.exit(RhpcBLASctl::blas_set_num_threads(old.blas.threads), add = TRUE)
+    } else {
+      warning(
+        "Parallel execution requested, but 'RhpcBLASctl' is not installed. Performance may be degraded if ",
+        "using a multithreaded BLAS implementation. Install 'RhpcBLASctl' or use n.threads = 1 to silence",
+        "this warning."
+      )
+    }
+  }
+
   grid.search.rcpp(
     X = X,
     y = y,

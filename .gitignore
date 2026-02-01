@@ -1,9 +1,15 @@
 .Rproj.user
 .Rhistory
 .RData
+.Ruserdata
 .idea/
 .clang-format
 compile_commands.json
+.vscode/
+/*.Rcheck/
+*.tar.gz
 src/*.o
 src/*.so
-src/*.rds
+src/*.dll
+src/*.dylib
+src/*.a

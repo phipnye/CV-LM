@@ -22,7 +22,7 @@ template <typename Decomp, typename TX, typename TY>
     return false;
   }
 
-  // Set Lambda (only if the class requires it, e.g., Ridge/SVD)
+  // Set lambda (only if the class requires it, e.g., Ridge/SVD)
   if constexpr (Decomp::requiresLambda) {
     decomp.setLambda(lambda);
   }

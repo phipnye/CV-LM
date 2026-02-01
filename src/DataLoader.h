@@ -26,7 +26,7 @@ class DataLoader {
   explicit DataLoader(const arma::mat& X, const arma::vec& y, int seed,
                       arma::uword k);
 
-  [[nodiscard]] LoadValues load(arma::uword testID, arma::mat& XtrainBufT,
+  [[nodiscard]] LoadValues load(arma::uword testID, arma::mat& XtrainBuf,
                                 arma::vec& yTrainBuf) const;
 
   [[nodiscard]] arma::uword maxTrain() const noexcept;

@@ -128,11 +128,11 @@ test_that("grid.search matches brute-force cvLM sweep", {
           )
 
           best.idx <- which.min(manual.cvs)
-          
+
           if (grid.res$lambda != lambdas[best.idx]) {
             browser()
           }
-          
+
           expect_equal(grid.res$CV, manual.cvs[best.idx])
           expect_equal(grid.res$lambda, lambdas[best.idx])
         }
@@ -184,4 +184,3 @@ test_that("grid.search results are agnostic to the number of threads", {
     }
   }
 })
-

@@ -71,7 +71,8 @@ class Worker : public RcppParallel::Worker {
 
     for (arma::uword testID{static_cast<arma::uword>(foldStart)};
          testID < endID; ++testID) {
-      // Load the test and training data sets
+      // Load the test and training data sets (training sets are loaded in-place
+      // into buffers to prevent heap allocations in hot loop)
       const auto [Xtest, yTest, testSize,
                   trainSize]{loader_.load(testID, XtrainBuf_, yTrainBuf_)};
       const arma::subview Xtrain{XtrainBuf_.head_rows(trainSize)};
@@ -115,7 +116,7 @@ class Worker : public RcppParallel::Worker {
   [[nodiscard]] double getCV() const {
     // Make sure all decompositions were successful before returning a result
     if (!success_) {
-      // getCV won't be called from a multithreaded context
+      // Safe (won't be called from a multithreaded context)
       Rcpp::stop(
           "One or more decompositions were unsuccessul in evaluation of K-Fold "
           "CV.");

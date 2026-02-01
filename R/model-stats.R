@@ -5,9 +5,6 @@
 .get_fun <- function(FUN) {
   get(FUN, envir = asNamespace("cvLM"), mode = "function")
 }
-r.squared <- function(model) summary(model)$r.squared
-adj.r.squared <- function(model) summary(model)$adj.r.squared
-fstatistic <- function(model) summary(model)$fstatistic$value
 
 .coef_df <- function(
   model.summary,
